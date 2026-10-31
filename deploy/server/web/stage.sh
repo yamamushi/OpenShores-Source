@@ -56,7 +56,9 @@ install -d "$context/bin" "$context/lib" "$context/images"
 # Older staged contexts may still contain the retired build-context allowlist.
 rm -f -- "$context/Dockerfile.dockerignore"
 for filename in "${web_files[@]}"; do
-    install -D -m 0644 "$web_dir/$filename" "$context/$filename"
+    # macOS install has no GNU -D option; create parents explicitly.
+    install -d "$(dirname "$context/$filename")"
+    install -m 0644 "$web_dir/$filename" "$context/$filename"
 done
 install -m 0755 "$web_dir/health.cgi" "$web_dir/entrypoint.sh" \
     "$web_dir/generate-standings.sh" "$web_dir/generate-avatars.sh" \

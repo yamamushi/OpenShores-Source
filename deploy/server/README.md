@@ -76,6 +76,62 @@ password: local
 
 Change the credentials in `local.env` before the first initialization, or run `make server-reset` after changing them.
 
+### ARM64 development on Apple Silicon
+
+Use the `arm-server` branch, based on upstream `main`, in a separate checkout
+from `mac-client`. Docker builds native Linux ARM64 servers with the same
+OpenShores protocol definitions as the Mac client. Linux ARM builds explicitly
+use signed `char` for the game's negative sentinel values. Procedural seeds
+convert through signed 64-bit integers before wrapping to 32 bits, preserving
+the existing x86 arithmetic for negative noise and large orbital distances.
+
+Limit compiler parallelism on machines sharing memory with Docker Desktop and
+give this checkout its own build cache:
+
+```bash
+HAZERON_BUILD_JOBS=4 \
+HAZERON_LINUX_CACHE_VOLUME=openshores-arm-server-debug-cache \
+make server-up LINUX_IMAGE=openshores-arm64-toolchain
+```
+
+The normal toolchain image is built automatically. `HAZERON_BUILD_JOBS` is
+optional; without it, Docker builds retain their existing CPU-count default.
+`HAZERON_LINUX_CACHE_VOLUME` is optional too; the existing per-configuration
+cache remains the default. Compiled artifacts are exported under `build/`.
+
+Use ignored `environments/local.env` overrides for a distinct
+`COMPOSE_PROJECT_NAME` and `POSTGRES_VOLUME`, and keep `BIND_ADDRESS` and
+`PUBLIC_HOST` set to `127.0.0.1`. Stop any other farm using the same game ports
+before starting this one. A new volume creates a fresh universe; stopping the
+old farm does not migrate its database or avatars. Local account credentials
+come from this deployment's `LOCAL_PLAYER_NAME` and `LOCAL_PLAYER_PASSWORD`.
+
+Check the running farm without replacing a player's session:
+
+```bash
+python3 deploy/server/probe.py --status-only
+python3 deploy/server/probe.py --login-only
+```
+
+With the graphical client logged out, run `python3 deploy/server/probe.py` for
+an account and scene handshake followed by logout. The probe reads current
+versions from this checkout and credentials from ignored generated settings,
+refuses connections outside loopback, and does not create an avatar. Then
+connect the Mac client with host `127.0.0.1` to test entering and moving in the
+world. Health checks use listening socket state rather than empty TCP connects.
+
+The optional `diagnostics/compare-seed-casts.cpp` compares the legacy conversion
+with the portable conversion. The x86 Clang check matched all 100,000 noise
+samples and 10,000 orbital distances; Linux ARM64 GCC reproduced the legacy
+differences in 50,151 noise samples and 9,995 distances. This checks arithmetic,
+not full Linux/Windows client behavior or rendered-world compatibility.
+
+The Linux ARM64 Debug `server-deployment` build and Docker startup passed.
+Login, mail, and scene roles were healthy, with one scene manager and one worker
+registered. Loopback login redirection, account authentication, and a separate
+account's scene-version handshake/logout passed. Avatar creation and rendered
+world testing remain manual checks in the Mac client.
+
 ### Apache web service
 
 The `web` service installs Apache 2 with the `event` MPM and `mod_cgid` in a

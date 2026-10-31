@@ -167,7 +167,7 @@ quint32 DaSector::GenSeed() const
 	// Again we incorporate the galaxy's genSeed, otherwise randFunc would only produce 12 different galaxies.
 	double noiseXY = AuNoise::IntegerNoise(randFunc, round(gloc.x), round(gloc.y));	// Range is -1 to 1
 	double noiseZG = AuNoise::IntegerNoise(randFunc, round(gloc.z), genSeed);		// Range is -1 to 1
-	genSeed += (quint32)(noiseXY * 0xffffffff) + (quint32)(noiseZG * 0xffffffff);
+	genSeed += (quint32)(qint64)(noiseXY * 0xffffffff) + (quint32)(qint64)(noiseZG * 0xffffffff);
 	if(genSeed)
 		return genSeed;
 
@@ -201,7 +201,7 @@ void DaSector::Init()
 		do
 		{
 			double noise = AuNoise::IntegerNoise(randFunc, genSeed);
-			genSeed += (quint32)(noise * 0xffffffff);
+			genSeed += (quint32)(qint64)(noise * 0xffffffff);
 		}
 		while(!genSeed);
 
@@ -282,7 +282,7 @@ void DaSector::Init()
 		do
 		{
 			double noise = AuNoise::IntegerNoise(randFunc, genSeed);
-			genSeed += (quint32)(noise * 0xffffffff);
+			genSeed += (quint32)(qint64)(noise * 0xffffffff);
 		}
 		while(!genSeed);
 

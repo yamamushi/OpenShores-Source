@@ -73,6 +73,7 @@ docker run --rm \
     --env "AU_CMAKE_BUILD_TYPE=$cmake_build_type" \
     --env "AU_IMAGE_ID=$image_id" \
     --env "AU_TARGET=$target" \
+    --env "AU_BUILD_JOBS=${HAZERON_BUILD_JOBS:-}" \
     --env "AU_WORKSPACE_ROOT=$editor_workspace_root" \
     --mount "type=bind,source=$daemon_repo_root,target=/src,readonly" \
     --mount "type=volume,source=$cache_volume,target=/build" \
@@ -91,7 +92,7 @@ docker run --rm \
             -DAU_OUTPUT_ROOT=/output
         cmake --build /build \
             --target "$AU_TARGET" \
-            --parallel "$(nproc)"
+            --parallel "${AU_BUILD_JOBS:-$(nproc)}"
         python3 /src/docker/support/export-intellisense.py \
             --compile-commands /build/compile_commands.json \
             --compiler c++ \

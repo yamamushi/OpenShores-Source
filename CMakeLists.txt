@@ -67,6 +67,12 @@ include(cmake/AuTargets.cmake)
 
 add_library(AuBuildSettings INTERFACE)
 target_compile_features(AuBuildSettings INTERFACE cxx_std_11)
+# Linux ARM defaults to unsigned char; game fields use negative char sentinels.
+# Match the existing x86 ABI without changing Mac or Windows compiler options.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$"
+   AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(AuBuildSettings INTERFACE -fsigned-char)
+endif()
 target_include_directories(AuBuildSettings INTERFACE
     "${CMAKE_BINARY_DIR}/generated"
 )

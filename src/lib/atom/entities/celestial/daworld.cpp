@@ -501,14 +501,14 @@ quint32 DaWorld::GenSeed() const
 				m_GenSeed = 0;
 			}
 		}
-		m_GenSeed += (quint32)(FROUND(m_OrbitRadius, .001) * FeetPerAu());
+		m_GenSeed += (quint32)(qint64)(FROUND(m_OrbitRadius, .001) * FeetPerAu());
 		m_GenSeed += 123456 * OrbitIndex();
 
 		// Use noise to select a GenSeed value for this world.
 		do
 		{
 			double noise = AuNoise::IntegerNoise(m_OrbitZone, m_GenSeed);
-			m_GenSeed += (quint32)(noise * 0xffffffff);
+			m_GenSeed += (quint32)(qint64)(noise * 0xffffffff);
 		}
 		while(!m_GenSeed);
 

@@ -10,7 +10,7 @@ config=$1
 image=$2
 target=$3
 toolchain_image=${4:-hazeron-linux-qt5}
-cache_volume=${5:-hazeron-linux-${config}-cache}
+cache_volume=${5:-${HAZERON_LINUX_CACHE_VOLUME:-hazeron-linux-${config}-cache}}
 
 case "$config" in
     debug|release|relwithdebinfo) ;;
