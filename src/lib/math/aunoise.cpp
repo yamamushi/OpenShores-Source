@@ -101,20 +101,23 @@ float AuNoiseF::Cosine_Interpolate(float a, float b, float x)
 
 float AuNoiseF::IntegerNoise(unsigned int randFunc, int x)
 {
-	int n = (x<<13) ^ x;
-	return Random(n, s_SmallPrime[randFunc], s_MediumPrime[randFunc], s_BigPrime[randFunc]);
+	quint32 n = (quint32)x;
+	n = (n<<13) ^ n;
+	return Random((int)(n & 0x7fffffffu), s_SmallPrime[randFunc], s_MediumPrime[randFunc], s_BigPrime[randFunc]);
 }
 
 float AuNoiseF::IntegerNoise(unsigned int randFunc, int x, int y)
 {
-	int n = x + y * s_TinyPrime[randFunc];
+	quint32 n = (quint32)x + (quint32)y * (quint32)s_TinyPrime[randFunc];
 	n = (n<<13) ^ n;
-	return Random(n, s_SmallPrime[randFunc], s_MediumPrime[randFunc], s_BigPrime[randFunc]);
+	return Random((int)(n & 0x7fffffffu), s_SmallPrime[randFunc], s_MediumPrime[randFunc], s_BigPrime[randFunc]);
 }
 
 float AuNoiseF::Random(int seed, int smallPrime, int medPrime, int bigPrime)
 {
-	int nn = (seed * (seed * seed * smallPrime + medPrime) + bigPrime) & 0x7fffffff;
+	// Hash arithmetic intentionally wraps at 32 bits, on every platform.
+	quint32 n = (quint32)seed;
+	quint32 nn = (n * (n * n * (quint32)smallPrime + (quint32)medPrime) + (quint32)bigPrime) & 0x7fffffffu;
 	return 1.f - (float)nn / 1073741824.f;
 }
 
@@ -540,20 +543,23 @@ double AuNoise::Cosine_Interpolate(double a, double b, double x)
 
 double AuNoise::IntegerNoise(unsigned int randFunc, int x)
 {
-	int n = (x<<13) ^ x;
-	return Random(n, s_SmallPrime[randFunc], s_MediumPrime[randFunc], s_BigPrime[randFunc]);
+	quint32 n = (quint32)x;
+	n = (n<<13) ^ n;
+	return Random((int)(n & 0x7fffffffu), s_SmallPrime[randFunc], s_MediumPrime[randFunc], s_BigPrime[randFunc]);
 }
 
 double AuNoise::IntegerNoise(unsigned int randFunc, int x, int y)
 {
-	int n = x + y * s_TinyPrime[randFunc];
+	quint32 n = (quint32)x + (quint32)y * (quint32)s_TinyPrime[randFunc];
 	n = (n<<13) ^ n;
-	return Random(n, s_SmallPrime[randFunc], s_MediumPrime[randFunc], s_BigPrime[randFunc]);
+	return Random((int)(n & 0x7fffffffu), s_SmallPrime[randFunc], s_MediumPrime[randFunc], s_BigPrime[randFunc]);
 }
 
 double AuNoise::Random(int seed, int smallPrime, int medPrime, int bigPrime)
 {
-	int nn = (seed * (seed * seed * smallPrime + medPrime) + bigPrime) & 0x7fffffff;
+	// Hash arithmetic intentionally wraps at 32 bits, on every platform.
+	quint32 n = (quint32)seed;
+	quint32 nn = (n * (n * n * (quint32)smallPrime + (quint32)medPrime) + (quint32)bigPrime) & 0x7fffffffu;
 	return 1. - (double)nn / 1073741824.;
 }
 

@@ -2553,26 +2553,30 @@ namespace AuDef
 	{
 		if(logByte == 0 || maxPossibleValue == 0)
 			return 0;
+		if(logByte >= d_LogByteRange || maxPossibleValue == 1)
+			return maxPossibleValue;
 		// 255 could be used instead of m_LogByteRange, to scale the value to fit exactly inside a byte.
 		double scale = (double)d_LogByteRange / log(maxPossibleValue);
 		double exponent = logByte / scale;
-		quint16 val = (quint16)round(exp(exponent));
+		double val = round(exp(exponent));
 		if(val > maxPossibleValue)
 			val = maxPossibleValue;	// In case of rounding.
-		return val;
+		return (quint16)val;
 	}
 
 	inline quint16 FromLogByteD(double logByte, quint16 maxPossibleValue)
 	{
-		if(logByte == 0 || maxPossibleValue == 0)
+		if(!(logByte > 0) || maxPossibleValue == 0) // Also rejects NaN.
 			return 0;
+		if(logByte >= d_LogByteRange || maxPossibleValue == 1)
+			return maxPossibleValue;
 		// 255 could be used instead of m_LogByteRange, to scale the value to fit exactly inside a byte.
 		double scale = (double)d_LogByteRange / log(maxPossibleValue);
 		double exponent = logByte / scale;
-		quint16 val = (quint16)round(exp(exponent));
+		double val = round(exp(exponent));
 		if(val > maxPossibleValue)
 			val = maxPossibleValue;	// In case of rounding.
-		return val;
+		return (quint16)val;
 	}
 
 	inline quint16 ReadLogByte(QDataStream& in, quint16 maxPossibleValue)
