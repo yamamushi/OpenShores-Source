@@ -718,6 +718,7 @@ public:	// Methods
 
 	// 'renameWhat' 0=city, 1=planet, 2=solar system, 3=sector, 4=young avatar, 5=building.
 	// Returns true on success.
+	// Types 0-5 retain their original meaning; type 6 renames the NPC identified by capitolOpId.
 	bool Rename(quint8 renameWhat, const QString& nuName, const AuId& capitolOpId);
 
 	void RepairShopRecover();

@@ -5,6 +5,12 @@
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
 #include "aunpcresume.h"
+#include "auapp.h"
+#include "danpc.h"
+#include <QInputDialog>
+#include <QLineEdit>
+#include <QMessageBox>
+#include <QPushButton>
 //
 #include "auglobal.h"
 #include "dabd.h"
@@ -654,6 +660,28 @@ AuNpcResume::AuNpcResume(const DaSentient& sent, QWidget* parent) : AuDialog(par
 
 	QVBoxLayout* lay = new QVBoxLayout;
 	lay->addWidget(tb);
+    if(dynamic_cast<const DaNpc*>(&sent))
+    {
+        QPushButton* rename = new QPushButton(tr("Rename NPC…"), this);
+        rename->setToolTip(tr("Rename an NPC of your empire aboard a spacecraft in your chain of command."));
+        const AuId npcId = sent.Id();
+        const QString oldName = sent.AssignedName();
+        connect(rename, &QPushButton::clicked, this, [this, npcId, oldName]() {
+            bool ok = false;
+            QString name = QInputDialog::getText(this, tr("Rename NPC"), tr("Name"), QLineEdit::Normal, oldName, &ok).trimmed();
+            if(!ok) return;
+            if(!IsNameValid(name))
+            {
+                QMessageBox::warning(this, tr("Rename NPC"), tr("Enter a valid name of at most %1 characters.").arg(MaxNameLength()));
+                return;
+            }
+            auApp->NpcRename(npcId, name);
+            // The server reports the outcome through the normal thought/log channel.
+            // Reopen the resume after the authoritative update to see the new name.
+            hide();
+        });
+        lay->addWidget(rename);
+    }
 	lay->setMargin(2);
 	lay->setSpacing(2);
 	setAuDlgLayout(lay);

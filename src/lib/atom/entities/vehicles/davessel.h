@@ -3416,6 +3416,7 @@ public:	// Methods
 	// That code is in DtSceneServer::ReconcileRoster.
 	// This function does nothing if this ship has human officers.
 	void ReconcileRoster();
+	void RenameRosterOccupant(const AuId& id, const QString& name);
 
 	// Removes troops from the roster that cannot be found aboard the ship.
 	// This function does nothing if this ship has human officers.

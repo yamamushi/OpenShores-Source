@@ -5,6 +5,7 @@
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
 #include "auapp.h"
+#include "aunpcnamehistory.h"
 //
 #include "auatommanager.h"
 #include "auclientglobal.h"
@@ -16778,3 +16779,17 @@ void AuApp::GovSetJoinPasswordUp(quint32 empire, QByteArray passCrypt)
 	g_Au.UnlockData();
 }
 
+
+void AuApp::NpcRename(const AuId& npcId, const QString& name)
+{
+    if(npcId.IsNull() || name.trimmed().isEmpty() || !IsNameValid(name)) return;
+    RecordNpcNameSubmission(npcId, name);
+    if(IsSingleUserMode()) m_I->Rename(6, name, npcId);
+    else
+    {
+        QByteArray ba; QDataStream out(&ba, QIODevice::WriteOnly);
+        out.setVersion(QDataStream::Qt_4_1);
+        out << (quint8)DtChatChannelPacket::PE_Rename << (quint8)6 << name << npcId;
+        QueueChatPacket(ba);
+    }
+}

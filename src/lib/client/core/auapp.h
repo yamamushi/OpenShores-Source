@@ -186,6 +186,7 @@ public:
 	// Returns the id of the person atom for whom the scene is generated.
 	const AuId& AvatarId() const;
 
+	void NpcRename(const AuId& npcId, const QString& name);
 	void AvatarRename(const QString& nuName);
 
 	void BankBorrow(double amount, const AuId& opBd);

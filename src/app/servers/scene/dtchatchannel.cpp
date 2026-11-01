@@ -3907,8 +3907,11 @@ void DtChatChannel::ReadPacket(const QByteArray& ba, QTcpSocket& tcpSocket)
 
 			block >> renameWhat;
 			block >> nuName;
-			if(renameWhat == 5)
-				block >> capitolOpId;	// Rename building can be done from capitol. Then capitolOpId is the building id to rename.
+			if(renameWhat == 5 || renameWhat == 6)
+				block >> capitolOpId;	// Building operation target (5), or NPC target ID (6).
+
+			if(block.status() != QDataStream::Ok)
+				break;
 
 			if(m_I->Rename(renameWhat, nuName, capitolOpId) && renameWhat == 4)
 				m_UnitName = nuName;

@@ -20725,3 +20725,16 @@ double DaVessel::ExploreRadius(const DaWorldLL& world) const
 	return ObstacleRadius() + 250*FeetPerMeter() + AltitudeAGL();
 }
 
+
+void DaVessel::RenameRosterOccupant(const AuId& id, const QString& name)
+{
+    m_RosterLock.lockForWrite();
+    for(AuRoster::iterator it = m_Roster.begin(); it != m_Roster.end(); ++it)
+        if(it->m_OccId == id && it->m_OccName != name)
+        {
+            it->m_OccName = name;
+            m_tmRosterChange.Set();
+            SetModified();
+        }
+    m_RosterLock.unlock();
+}

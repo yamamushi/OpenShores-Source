@@ -14,6 +14,7 @@
 #include "ausetrender.h"
 #include "ausetsound.h"
 #include "ausetwindows.h"
+#include "ausettwitch.h"
 #include <auglobal.h>
 #include <QGridLayout>
 #include <QIcon>
@@ -113,6 +114,12 @@ AuSettingsDialog::AuSettingsDialog(bool showF12, QWidget* parent) : AuDialog(par
 	m_Tabs->setTabToolTip(itab, QString("<html><b>Program</b><br>"
 			"Program settings affect the way the program runs."
 			"</html>"));
+
+	// Twitch
+	AuSetTwitch* pageTwitch = new AuSetTwitch(this);
+	m_Pages->addWidget(pageTwitch);
+	itab = m_Tabs->addTab(QIcon(":data/TwitchGlitchPurple.png"), tr("Twitch"));
+	m_Tabs->setTabToolTip(itab, tr("Twitch channel and NPC naming preferences."));
 
 	// Layout the widgets.
 	QGridLayout* lay = new QGridLayout();

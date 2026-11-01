@@ -4457,9 +4457,9 @@ void AuAtomInterface::GovtAcctWithdrawFunds(double amount, const AuId& opBd)
 
 bool AuAtomInterface::Rename(quint8 renameWhat, const QString& nuName, const AuId& capitolOpId)
 {
-	if(renameWhat > 5)
+	if(renameWhat > 6)
 		return false;
-	if(!nuName.isEmpty() && !IsNameValid(nuName))
+	if((renameWhat == 6 && nuName.trimmed().isEmpty()) || (!nuName.isEmpty() && !IsNameValid(nuName)))
 		return false;
 
 	QString resultMsg;
@@ -4666,6 +4666,27 @@ bool AuAtomInterface::Rename(quint8 renameWhat, const QString& nuName, const AuI
 					}
 				}
 				break;
+            case 6: // NPC; capitolOpId carries the target NPC ID.
+            {
+                DaNpc* npc = dynamic_cast<DaNpc*>(system->FindIdRecursive(capitolOpId));
+                DaVessel* ship = npc ? npc->FindParentVesselInEnv() : 0;
+                if(!npc)
+                    resultMsg = tr("The NPC is no longer available in this solar system.");
+                else if(!person->EmpireId() || npc->EmpireId() != person->EmpireId() ||
+                        !ship || !ship->InChainOfCommand(person))
+                    resultMsg = tr("I can only rename NPCs of my empire aboard a spacecraft in my chain of command.");
+                else if(npc->CurrentHitPoints() <= 0)
+                    resultMsg = tr("I cannot rename a dying NPC.");
+                else
+                {
+                    npc->SetName(nuName);
+                    npc->SetModified();
+                    ship->RenameRosterOccupant(npc->Id(), npc->Name());
+                    renameId = npc->Id();
+                    resultMsg = tr("The NPC was renamed to %1.").arg(nuName);
+                }
+                break;
+            }
 			case 5:												// Building
 				if(person->BdOp(capitolOpId))
 				{
