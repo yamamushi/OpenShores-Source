@@ -3778,8 +3778,7 @@ DaVehicle* DaVehicle::LoadSubatoms(AuEther& ether, QSqlDatabase& db, const AuId&
 		sq += QString(" idp=%1").arg(parentId.GetID());
 	sq += ";";
 	QSqlQuery qa(QString(), db);
-	qa.prepare(sq);
-	qa.exec();
+	qa.exec(sq);
 	while(qa.next())
 	{
 		DaVehicle *pnu = new DaVehicle;

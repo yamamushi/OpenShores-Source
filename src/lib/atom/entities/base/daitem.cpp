@@ -1224,8 +1224,7 @@ DaItem* DaItem::LoadSubatoms(AuEther& ether, QSqlDatabase& db, const AuId& paren
 		sq += " idp=" + QVariant(parentId.GetID()).toString();
 	sq += ";";
 	QSqlQuery qa(QString(), db);
-	qa.prepare(sq);
-	qa.exec();
+	qa.exec(sq);
 	while(qa.next())
 	{
 		DaItem *pnu = new DaItem;
