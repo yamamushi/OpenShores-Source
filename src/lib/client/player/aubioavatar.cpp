@@ -48,12 +48,13 @@ AuBioAvatar::AuBioAvatar(QWidget *parent) : QWidget(parent)
 				"</html>").arg(g_Au.MiddleDotSymbol()));
 	connect(pbrequestavatars, SIGNAL(clicked()), auApp, SLOT(RequestAvatars()));
 
-	AuIconButton* pbselfie = new AuIconButton(QIcon(":data/c_Camera.png"), this);
-	pbselfie->setToolTip(tr("<b>Selfie...</b><br>"
+	m_SelfieButton = new AuIconButton(QIcon(":data/c_Camera.png"), this);
+	m_SelfieButton->setEnabled(false);
+	m_SelfieButton->setToolTip(tr("<b>Selfie...</b><br>"
 					"Sends the current avatar image on this window to the server. "
 					"The image is shown to you for confirmation before sending. "
 					"The selfie will appear on the current avatar's web page."));
-	connect(pbselfie, SIGNAL(clicked()), SLOT(GrabSelfie()));
+	connect(m_SelfieButton, SIGNAL(clicked()), SLOT(GrabSelfie()));
 
 	pbrelease = new QPushButton(tr("Release Berth..."));
 	pbrelease->setIcon(QIcon(":data/dp_Berth0.png"));
@@ -196,7 +197,7 @@ AuBioAvatar::AuBioAvatar(QWidget *parent) : QWidget(parent)
 	// Create widgets.
 	QGridLayout* avlay = new QGridLayout;
 	avlay->addWidget(pbrequestavatars, 0,0);
-	avlay->addWidget(pbselfie, 1,0);
+	avlay->addWidget(m_SelfieButton, 1,0);
 	for(int ichr=0; ichr<6; ichr++)
 	{
 		m_Avatars[ichr] = new AuPushButtonValue("", ichr, this);
@@ -246,6 +247,28 @@ AuBioAvatar::AuBioAvatar(QWidget *parent) : QWidget(parent)
 
 AuBioAvatar::~AuBioAvatar()
 {
+	SetSceneAtomImageNeeded(false);
+}
+
+void AuBioAvatar::SetSceneAtomImageNeeded(bool needed)
+{
+	AuView* view = needed ? auApp->Frame()->View() : 0;
+	QObject* notifier = view ? view->SceneAtomImageNotifier() : 0;
+	if(m_SceneImageNotifier == notifier)
+		return;
+	if(m_SceneImageNotifier)
+	{
+		disconnect(m_SceneImageNotifier, SIGNAL(SceneAtomImageChanged()), this, SLOT(UpdateSceneAtomImage()));
+		AuView* oldView = dynamic_cast<AuView*>(m_SceneImageNotifier.data());
+		if(oldView)
+			oldView->SetSceneAtomImageNeeded(this, false);
+	}
+	m_SceneImageNotifier = notifier;
+	if(notifier)
+	{
+		connect(notifier, SIGNAL(SceneAtomImageChanged()), this, SLOT(UpdateSceneAtomImage()), Qt::QueuedConnection);
+		view->SetSceneAtomImageNeeded(this, true);
+	}
 }
 
 QSize AuBioAvatar::sizeHint() const
@@ -256,6 +279,7 @@ QSize AuBioAvatar::sizeHint() const
 void AuBioAvatar::showEvent(QShowEvent* event)
 {
 	QWidget::showEvent(event);
+	SetSceneAtomImageNeeded(true);
 
 	// Create a timer to keep this page updated.
 	if(!m_timer)
@@ -265,6 +289,34 @@ void AuBioAvatar::showEvent(QShowEvent* event)
 	}
 	if(!m_timer->isActive())
 		m_timer->start(1000);
+	UpdateContents();
+}
+
+void AuBioAvatar::hideEvent(QHideEvent* event)
+{
+	SetSceneAtomImageNeeded(false);
+	if(m_timer)
+		m_timer->stop();
+	QWidget::hideEvent(event);
+}
+
+void AuBioAvatar::UpdateSceneAtomImage()
+{
+	if(!isVisible())
+		return;
+	AuView* view = dynamic_cast<AuView*>(m_SceneImageNotifier.data());
+	QImage viewImage = view ? view->SceneAtomImage() : QImage();
+	m_SelfieButton->setEnabled(!viewImage.isNull());
+	if(viewImage.isNull())
+	{
+		lbimg->clear();
+		return;
+	}
+	QImage image(256,256, QImage::Format_RGB32);
+	image.fill(QColor(64,64,64));
+	QPainter p(&image);
+	p.drawImage(QRect(0,0,256,256), viewImage);
+	lbimg->setPixmap(QPixmap::fromImage(image));
 }
 
 void AuBioAvatar::UpdateContents()
@@ -274,8 +326,10 @@ void AuBioAvatar::UpdateContents()
 		// Kill the timer. It will be recreated during the next showEvent.
 		if(m_timer && m_timer->isActive())
 			m_timer->stop();
+		SetSceneAtomImageNeeded(false);
 		return;
 	}
+	SetSceneAtomImageNeeded(true);
 
 	// Get the scene atom so we can show their information.
 	AuFrame* pFrame = auApp->Frame();
@@ -285,18 +339,11 @@ void AuBioAvatar::UpdateContents()
 	if(!person)
 	{
 		view->UnlockSceneAtom();
+		UpdateSceneAtomImage();
 		return;
 	}
 
-	QImage viewImage(view->SceneAtomImage());
-	if(!viewImage.isNull())
-	{
-		QImage image(256,256, QImage::Format_RGB32);
-		image.fill(QColor(64,64,64));
-		QPainter p(&image);
-		p.drawImage(QRect(0,0,256,256), viewImage);
-		lbimg->setPixmap(QPixmap::fromImage(image));
-	}
+	UpdateSceneAtomImage();
 
 	// Get the known ids and names of their characters.
 	// First, hide the ones that need to be invisible.

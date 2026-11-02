@@ -754,6 +754,8 @@ private:
 	AuElapsedTimer						m_SceneAtomImgTime;		// So we don't make one in every frame.
 	mutable QReadWriteLock				m_SceneImgLock;
 	QImage								m_SceneAtomImage;
+	AuId								m_SceneAtomImageTarget;
+	QHash<QObject*, QMetaObject::Connection> m_SceneAtomImageConsumers;
 
 private:
 	mutable QReadWriteLock				m_SceneInfoLock;
@@ -1140,6 +1142,9 @@ public:
 		m_SceneImgLock.unlock();
 		return v;
 	}
+
+	virtual void SetSceneAtomImageNeeded(QObject* consumer, bool needed);
+	virtual QObject* SceneAtomImageNotifier() { return this; }
 
 	inline bool SceneAtomInTransition() const
 	{
@@ -1787,6 +1792,7 @@ signals:
 	void RequestScreenShot();
 
 	void SceneAtomChanged();
+	void SceneAtomImageChanged();
 
 	// 'sceneContext' is a SCENE_CONTEXT value.
 	void SceneContextChanged(int sceneContext);
@@ -1799,6 +1805,8 @@ signals:
 
 private:
 	void CheckDossier();
+	void InvalidateSceneAtomImage();
+	void SetSceneAtomImageTarget(const AuId& id);
 
 	AuControlButton ControlButtonAt(const QPoint& mousePos) const;
 

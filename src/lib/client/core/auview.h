@@ -17,6 +17,7 @@ class AuCommPacket;
 class AuDNABase;
 class AuSelectedUnitArray;
 class DaPerson;
+class QObject;
 
 enum SCENE_CONTEXT
 {
@@ -60,6 +61,10 @@ public:
 	virtual const AuId& SceneAtomId() const = 0;
 
 	virtual QImage SceneAtomImage() const = 0;
+
+	// Image-producing views register visible consumers and notify them when the cache changes.
+	virtual void SetSceneAtomImageNeeded(QObject*, bool) {}
+	virtual QObject* SceneAtomImageNotifier() { return 0; }
 
 	// Returns the id of the ship that contains the scene atom, if any.
 	virtual AuId SceneAtomInShip() const = 0;
