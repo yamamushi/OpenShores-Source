@@ -1919,6 +1919,11 @@ AuDesignerView::~AuDesignerView()
 								// control threads after this.
 
 	StopThreads();
+	m_SceneImgLock.lockForWrite();
+	for(auto ci = m_SceneAtomImageConsumers.cbegin(); ci != m_SceneAtomImageConsumers.cend(); ci++)
+		QObject::disconnect(ci.value());
+	m_SceneAtomImageConsumers.clear();
+	m_SceneImgLock.unlock();
 
 	// Save last known whereabouts of the scene atom for display on the login screen.
 	// Does nothing if there is no scene atom.
@@ -2877,6 +2882,74 @@ void AuDesignerView::OnViewResetCamera()
 	m_tCamera = m_tSceneCamera;
 }
 
+// Visible consumers keep the portrait cache updated; their destruction releases demand.
+void AuDesignerView::SetSceneAtomImageNeeded(QObject* consumer, bool needed)
+{
+	if(!consumer)
+		return;
+	bool changed = false;
+	m_SceneImgLock.lockForWrite();
+	if(needed)
+	{
+		if(!m_SceneAtomImageConsumers.contains(consumer))
+		{
+			bool firstConsumer = m_SceneAtomImageConsumers.isEmpty();
+			auto connection = connect(consumer, &QObject::destroyed, this,
+					[this](QObject* object) { SetSceneAtomImageNeeded(object, false); }, Qt::DirectConnection);
+			m_SceneAtomImageConsumers.insert(consumer, connection);
+			if(firstConsumer)
+			{
+				m_SceneAtomImage = QImage();
+				m_SceneAtomImgTime.invalidate();
+				changed = true;
+			}
+		}
+	}
+	else
+	{
+		auto ci = m_SceneAtomImageConsumers.find(consumer);
+		if(ci != m_SceneAtomImageConsumers.end())
+		{
+			QObject::disconnect(ci.value());
+			m_SceneAtomImageConsumers.erase(ci);
+			if(m_SceneAtomImageConsumers.isEmpty())
+			{
+				m_SceneAtomImage = QImage();
+				m_SceneAtomImgTime.invalidate();
+				changed = true;
+			}
+		}
+	}
+	m_SceneImgLock.unlock();
+	if(changed)
+		emit SceneAtomImageChanged();
+}
+
+void AuDesignerView::InvalidateSceneAtomImage()
+{
+	m_SceneImgLock.lockForWrite();
+	m_SceneAtomImage = QImage();
+	m_SceneAtomImgTime.invalidate();
+	m_SceneImgLock.unlock();
+	emit SceneAtomImageChanged();
+}
+
+void AuDesignerView::SetSceneAtomImageTarget(const AuId& id)
+{
+	bool changed = false;
+	m_SceneImgLock.lockForWrite();
+	if(m_SceneAtomImageTarget != id)
+	{
+		m_SceneAtomImageTarget = id;
+		m_SceneAtomImage = QImage();
+		m_SceneAtomImgTime.invalidate();
+		changed = true;
+	}
+	m_SceneImgLock.unlock();
+	if(changed)
+		emit SceneAtomImageChanged();
+}
+
 // Commands this window to use a particular atom as the scene.
 // Triggers the model to begin acquiring the necessary data.
 // It may take a while before the new scene atom is ready.
@@ -2885,6 +2958,7 @@ void AuDesignerView::OnViewResetCamera()
 // If 'idScene' cannot render a scene, the next highest parent atom that can render a scene is used.
 void AuDesignerView::SetSceneAtom(const AuId& idScene)
 {
+	SetSceneAtomImageTarget(idScene);
 	//qDebug() << "AuDesignerView::SetSceneAtom" << idScene;
 	// Tell the app which atom we want as the scene atom.
 	// It may take some time for my scene data to catch up.
@@ -3087,18 +3161,19 @@ void AuDesignerView::RenderScene(DaPerson* sceneAtom)
 			sceneAtom->RenderScene(m_tProjection, m_tFarProjection, m_tCamera.Inverse(), *m_RenderInfo, targetAtom, targetLevel,
 					targetLoc, targetPart, targetStance, tDevicePersp, tDeviceOrtho, g_AuClient.HUDIntensity());
 
-		if(!m_SceneAtomImgTime.isValid() || m_SceneAtomImgTime.elapsed() > 1000)
+		bool imageChanged = false;
+		m_SceneImgLock.lockForWrite();
+		if(!m_SceneAtomImageConsumers.isEmpty() && sceneAtom->Is(m_SceneAtomImageTarget) &&
+				(!m_SceneAtomImgTime.isValid() || m_SceneAtomImgTime.elapsed() > 1000))
 		{
-			// The self portrait image is used mainly by the bio window. It only updates itself every 1000ms so I don't
-			// need to update the image any more often than that.
-			m_SceneImgLock.lockForWrite();
+			// Only render portraits for visible consumers, at most once per second.
 			m_SceneAtomImage = sceneAtom->SelfPortrait(*m_RenderInfo, QSize(512, 512), QColor(0,0,0,0));
-			m_SceneImgLock.unlock();
-			//m_SceneAtomImage.save(QString("minime%1-%2.png")
-					//.arg(QTime::currentTime().minute())
-					//.arg(QTime::currentTime().second()));
 			m_SceneAtomImgTime.restart();
+			imageChanged = true;
 		}
+		m_SceneImgLock.unlock();
+		if(imageChanged)
+			emit SceneAtomImageChanged();
 	}
 
 	// Add "cursor" objects to the scene.
@@ -6672,6 +6747,7 @@ void AuDesignerView::AtomChanged(DaAtom* atom)
 void AuDesignerView::AtomsCleared()
 {
 	m_SceneLock.lockForWrite();
+	InvalidateSceneAtomImage();
 	m_SceneEther.DeleteDeviceObjects(*m_RenderInfo);
 	m_SceneEther.DeleteEther();
 	m_SceneLock.unlock();

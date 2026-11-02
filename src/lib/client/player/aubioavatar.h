@@ -10,7 +10,9 @@
 #include "auclientlib.h"
 #include "audockwidget.h"
 #include "auglobal.h"
+#include <QPointer>
 
+class AuIconButton;
 class AuPushButtonValue;
 class QComboBox;
 class QLabel;
@@ -21,6 +23,10 @@ class AUCLIENT_DLL AuBioAvatar : public QWidget
 {
 	Q_OBJECT;
 private:
+	QPointer<QObject> m_SceneImageNotifier;
+	AuIconButton* m_SelfieButton;
+	void SetSceneAtomImageNeeded(bool needed);
+
 	QTimer*								m_timer;
 
 	// Widgets
@@ -48,6 +54,7 @@ public:
 
 protected:
 	virtual void showEvent(QShowEvent* event);
+	virtual void hideEvent(QHideEvent* event);
 
 protected slots:
 	void GrabSelfie();
@@ -57,6 +64,7 @@ protected slots:
 	void ShaveChanged(int index);
 	void SwitchToAvatar(int index);
 	void UpdateContents();
+	void UpdateSceneAtomImage();
 };
 
 #endif // AuBioAvatar_H

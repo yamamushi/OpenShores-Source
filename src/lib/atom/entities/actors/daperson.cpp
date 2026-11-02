@@ -19788,17 +19788,16 @@ QImage DaPerson::SelfPortrait(AuAtomRenderInfo& ari, const QSize& size, const QC
 	// At this point the texture is complete.
 	// Make a QImage out of the texture that was created.
 	QImage img(size, QImage::Format_ARGB32);
-	img.fill(Qt::black);
 	GLfloat* buffer = (GLfloat*)malloc(size.width()*size.height()*4*sizeof(GLfloat));
 	ari.re->glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, buffer);
-	for(int w=0; w<size.width(); w++)
+	for(int h=0; h<size.height(); h++)
 	{
-		for(int h=0; h<size.height(); h++)
+		QRgb* row = reinterpret_cast<QRgb*>(img.scanLine(size.height()-h-1));
+		for(int w=0; w<size.width(); w++)
 		{
 			int i = ((h*size.width()) + w)*4;
 			QRgb value = qRgba((int)(buffer[i]*255), (int)(buffer[i+1]*255), (int)(buffer[i+2]*255), (int)(buffer[i+3]*255));
-			//QRgb value = qRgba((int)(buffer[i]*255), (int)(buffer[i+1]*255), (int)(buffer[i+2]*255), 255);
-			img.setPixel(w, size.height()-h-1, value);	// Mirror vertically.
+			row[w] = value;	// Mirror vertically.
 		}
 	}
 	free(buffer);
