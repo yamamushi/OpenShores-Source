@@ -2227,25 +2227,17 @@ DaAtom::COLLISION_TYPE DaAtom::CheckCollisionRelativeToAtom(DaAtom* pParent, con
 	}
 
 	// Get a list of my peer atoms from my parent.
-	AuIdList peers;
 	DaAtomList subs;
 	pParent->ListNormalSubatoms(subs);
+
+	// When the movement step is large, we check peers for rough collision with the movement segment.
+	bool checkPathBlocked = foldloc.Distance2(fnuloc) > FeetPerMeter()*FeetPerMeter();
+	AuBox fext;
 	for(DaAtomList::const_iterator it = subs.cbegin(); it != subs.cend(); it++)
 	{
 		DaAtom* pAtom = *it;
 		if(Is(pAtom->Id()))
 			continue;	// Don't collide with myself.
-		peers.append(pAtom->Id());
-	}
-
-	// When the movement step is large, we check peers for rough collision with the movement segment.
-	bool checkPathBlocked = foldloc.Distance2(fnuloc) > FeetPerMeter()*FeetPerMeter();
-	AuBox fext;
-	for(AuIdList::iterator it = peers.begin(); it != peers.end(); it++)
-	{
-		DaAtom* pAtom = subs.FindId(*it);
-		if(!pAtom)
-			continue;
 		if(!pAtom->IsNormal())
 			continue;
 
