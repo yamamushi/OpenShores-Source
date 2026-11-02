@@ -3820,34 +3820,67 @@ bool AuGLTexture::CreateFromRGB(AuOpenGLFunctions& GLf, const unsigned char *rgb
 	return true;
 }
 
-// Creates this texture from a QImage.
-//static
-bool AuGLTexture::CreateFromBitmap(AuOpenGLFunctions& GLf, const QImage &bm, bool mipMap)
+static QImage TextureBitmapPixels(const QImage& bm)
 {
-	// Transfer bitmap to OpenGL texture.
-	int pixels = bm.width() * bm.height();
-	if(!pixels)
-		return false;
+	if(bm.isNull())
+		return QImage();
 
-	AuGLRGBA* ptex = new AuGLRGBA[pixels];
-	if(!ptex)
-		return false;
+	QImage::Format format = QImage::Format_Invalid;
+	switch(bm.format())
+	{
+	case QImage::Format_ARGB32_Premultiplied:
+	case QImage::Format_RGBA8888_Premultiplied:
+		// Preserve stored channels; the pixel loop did not unpremultiply them.
+		format = QImage::Format_RGBA8888_Premultiplied;
+		break;
+	case QImage::Format_ARGB32:
+	case QImage::Format_RGB32:
+	case QImage::Format_RGBA8888:
+	case QImage::Format_RGBX8888:
+		format = QImage::Format_RGBA8888;
+		break;
+	default:
+		break;
+	}
+	if(format != QImage::Format_Invalid)
+	{
+		QImage source = bm;
+		if(source.bytesPerLine() != source.width() * 4)
+			source = source.copy();
+		QImage pixels = source.convertToFormat(format).mirrored(false, true);
+		// Uploads use packed rows, including when the source has an external stride.
+		if(!pixels.isNull() && pixels.bytesPerLine() != pixels.width() * 4)
+			pixels = pixels.copy();
+		return pixels;
+	}
 
-	AuGLRGBA* pDest = ptex;
+	// Retain the existing per-pixel conversion for other image formats.
+	QImage pixels(bm.size(), QImage::Format_RGBA8888);
+	if(pixels.isNull())
+		return pixels;
+	unsigned char* pDest = pixels.bits();
 	for(int iy=bm.height()-1; iy>=0; iy--)
 	{
 		for(int ix=0; ix<bm.width(); ix++)
 		{
-			pDest->SetColor(bm.pixel(ix,iy));
-			pDest++;
+			QRgb color = bm.pixel(ix,iy);
+			*pDest++ = qRed(color);
+			*pDest++ = qGreen(color);
+			*pDest++ = qBlue(color);
+			*pDest++ = qAlpha(color);
 		}
 	}
+	return pixels;
+}
 
-	bool success = CreateFromRGB(GLf, (const unsigned char*)ptex, bm.width(), bm.height(), GL_RGBA, GL_UNSIGNED_BYTE, mipMap);
-
-	delete [] ptex;
-
-	return(success);
+// Creates this texture from a QImage.
+//static
+bool AuGLTexture::CreateFromBitmap(AuOpenGLFunctions& GLf, const QImage &bm, bool mipMap)
+{
+	const QImage pixels = TextureBitmapPixels(bm);
+	if(pixels.isNull())
+		return false;
+	return CreateFromRGB(GLf, pixels.constBits(), bm.width(), bm.height(), GL_RGBA, GL_UNSIGNED_BYTE, mipMap);
 }
 
 // expects a compact array of floats in sets of three or four, depending on format
@@ -3958,24 +3991,9 @@ void AuGLTexture::ReplaceSubImage(AuOpenGLFunctions& GLf, QImage &bm, unsigned i
 	if(!m_GlName || bm.isNull())
 		return;
 
-	// Transfer bitmap to OpenGL texture.
-	int pixels = bm.width() * bm.height();
-	if(!pixels)
+	const QImage pixels = TextureBitmapPixels(bm);
+	if(pixels.isNull())
 		return;
-
-	AuGLRGBA* ptex = new AuGLRGBA[pixels];
-	if(!ptex)
-		return;
-
-	AuGLRGBA* pDest = ptex;
-	for(int iy=bm.height()-1; iy>=0; iy--)
-	{
-		for(int ix=0; ix<bm.width(); ix++)
-		{
-			pDest->SetColor(bm.pixel(ix,iy));
-			pDest++;
-		}
-	}
 
 	// Establish the desired unpacking alignment before the texture is processed.
 	GLint oldalignment;
@@ -3987,7 +4005,7 @@ void AuGLTexture::ReplaceSubImage(AuOpenGLFunctions& GLf, QImage &bm, unsigned i
 	// Replace the subimage in the Gl texture object.
 	GLf.glBindTexture(GL_TEXTURE_2D, m_GlName);
 	OutputGlError(QString("File: %1 Line: %2 glBindTexture").arg(__FILE__).arg(__LINE__));
-	GLf.glTexSubImage2D(GL_TEXTURE_2D, 0, xpos, ypos, bm.width(), bm.height(), GL_RGBA, GL_UNSIGNED_BYTE, ptex);
+	GLf.glTexSubImage2D(GL_TEXTURE_2D, 0, xpos, ypos, bm.width(), bm.height(), GL_RGBA, GL_UNSIGNED_BYTE, pixels.constBits());
 	OutputGlError(QString("File: %1 Line: %2 glTexSubImage2D").arg(__FILE__).arg(__LINE__));
 	GLf.glBindTexture(GL_TEXTURE_2D, 0);
 	OutputGlError(QString("File: %1 Line: %2 glBindTexture").arg(__FILE__).arg(__LINE__));
@@ -3995,8 +4013,6 @@ void AuGLTexture::ReplaceSubImage(AuOpenGLFunctions& GLf, QImage &bm, unsigned i
 	// Restore the original unpack alignment state.
 	GLf.glPixelStorei(GL_UNPACK_ALIGNMENT, oldalignment);
 	OutputGlError(QString("File: %1 Line: %2 glPixelStorei").arg(__FILE__).arg(__LINE__));
-
-	delete [] ptex;
 }
 
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
