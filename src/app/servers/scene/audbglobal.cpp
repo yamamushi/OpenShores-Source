@@ -512,25 +512,24 @@ void AuDbGlobal::AtomAdded(const AuId& idAtom)
 	// If by chance the atom has already found its way into the deleted list,
 	// remove it from the deleted and changed lists and don't add it to the add
 	// list.
-	int idxDel = m_DeletedAtomIds.indexOf(idAtom);
-	if(idxDel >= 0)
+	if(m_DeletedAtomIdsIndex.remove(idAtom))
 	{
 		// Remove it from the deleted list.
-		m_DeletedAtomIds.removeAt(idxDel);	// Remove it from the delete list.
+		m_DeletedAtomIds.Remove(idAtom);	// Remove it from the delete list.
 	}
-	else if(!m_AddedAtomIds.contains(idAtom))
+	else if(!m_AddedAtomIdsIndex.contains(idAtom))
 	{
 		// Add it to the nuly added list so it will be saved by the db thread.
 		//qDebug("AuDbGlobal::AtomAdded - id %d", idAtom.GetID());
 		m_AddedAtomIds.append(idAtom);
+		m_AddedAtomIdsIndex.insert(idAtom);
 	}
 
 	// Remove it from the change list.
 	// Sometimes an atom has already been added to the change list because it
 	// gets modified before actually being added to a parent atom.
-	int idxChg = m_ChangedAtomIds.indexOf(idAtom);
-	if(idxChg >= 0)
-		m_ChangedAtomIds.removeAt(idxChg);	// Remove it from the change list.
+	if(m_ChangedAtomIdsIndex.remove(idAtom))
+		m_ChangedAtomIds.Remove(idAtom);	// Remove it from the change list.
 	m_muAtomTransactions.unlock();
 }
 
@@ -539,26 +538,28 @@ void AuDbGlobal::AtomChanged(const AuId& idAtom)
 	m_muAtomTransactions.lock();
 	// No need to update the atom if it hasn't been inserted into the db yet.
 	// The insert will save all its data.
-	bool addPending = m_AddedAtomIds.contains(idAtom);
+	bool addPending = m_AddedAtomIdsIndex.contains(idAtom);
 	if(!addPending)
 	{
 		// No need to update the atom if it is scheduled for deletion.
-		bool delPending = m_DeletedAtomIds.contains(idAtom);
+		bool delPending = m_DeletedAtomIdsIndex.contains(idAtom);
 		if(!delPending)
 		{
 			// Add the atom to the changed list so it will be updated by the
 			// db thread.
-			if(!m_ChangedAtomIds.contains(idAtom))
+			if(!m_ChangedAtomIdsIndex.contains(idAtom))
 			{
 				//qDebug("AuDbGlobal::AtomChanged - id %d", idAtom.GetID());
 				m_ChangedAtomIds.append(idAtom);
+				m_ChangedAtomIdsIndex.insert(idAtom);
 			}
 		}
 	}
 
 	// If we got a change notification for an atom, then it must be removed from the departed list.
 	// It could have departed and then arrived back again before we had a chance to update the database.
-	m_DepartedAtoms.Remove(idAtom);
+	if(m_DepartedAtomsIndex.remove(idAtom))
+		m_DepartedAtoms.Remove(idAtom);
 
 	m_muAtomTransactions.unlock();
 }
@@ -567,29 +568,29 @@ void AuDbGlobal::AtomDeleted(const AuId& idAtom)
 {
 	m_muAtomTransactions.lock();
 	// No need to update the atom if it's going to be deleted.
-	int idxChg = m_ChangedAtomIds.indexOf(idAtom);
-	if(idxChg >= 0)
-		m_ChangedAtomIds.removeAt(idxChg);	// Remove it from the change list.
+	if(m_ChangedAtomIdsIndex.remove(idAtom))
+		m_ChangedAtomIds.Remove(idAtom);	// Remove it from the change list.
 
 	// No need to delete the atom if it hasn't been added to the db yet.
 	// We can simply remove it from the add list.
-	int idxAdd = m_AddedAtomIds.indexOf(idAtom);
-	if(idxAdd >= 0)
+	if(m_AddedAtomIdsIndex.remove(idAtom))
 	{
 		// Remove it from the add list.
-		m_AddedAtomIds.removeAt(idxAdd);
+		m_AddedAtomIds.Remove(idAtom);
 	}
-	else if(!m_DeletedAtomIds.contains(idAtom))
+	else if(!m_DeletedAtomIdsIndex.contains(idAtom))
 	{
 		// Add the atom to the delete atoms list so it will be deleted
 		// by the db thread.
 		//qDebug("AuDbGlobal::AtomDeleted - id %d", idAtom.GetID());
 		m_DeletedAtomIds.append(idAtom);
+		m_DeletedAtomIdsIndex.insert(idAtom);
 	}
 
 	// If we got a delete notification for an atom, then it must be removed from the departed list.
 	// It could have departed and then arrived back again before we had a chance to update the database.
-	m_DepartedAtoms.Remove(idAtom);
+	if(m_DepartedAtomsIndex.remove(idAtom))
+		m_DepartedAtoms.Remove(idAtom);
 
 	m_muAtomTransactions.unlock();
 }
@@ -597,7 +598,11 @@ void AuDbGlobal::AtomDeleted(const AuId& idAtom)
 void AuDbGlobal::AtomDeparted(const AuId& id)
 {
 	m_muAtomTransactions.lock();
-	m_DepartedAtoms.AddIfUnique(id);
+	if(!m_DepartedAtomsIndex.contains(id))
+	{
+		m_DepartedAtoms.append(id);
+		m_DepartedAtomsIndex.insert(id);
+	}
 	m_HasCriticalUpdates = true;					// This needs to trigger an update right away.
 	m_muAtomTransactions.unlock();
 }

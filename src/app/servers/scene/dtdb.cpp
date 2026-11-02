@@ -1822,6 +1822,8 @@ void DtDb::StoreBdExchange(QSqlDatabase& db)
 void DtDb::StoreAtoms(QSqlDatabase& db, AuIdList& sectorsAdded, QList<AuTravelAtom>& atomsDeparted,
 		QList<AuSpawnAtom>& atomsSpawned, QList<AuHengeTeleportAtom>& atomsHengeTeleported)
 {
+	QSet<AuId> addedAtomIdsIndex, changedAtomIdsIndex, deletedAtomIdsIndex, departedAtomsIndex;
+
 	// Test the lists of added, changed, and deleted atoms.
 	g_AuDb.m_muAtomTransactions.lock();
 	m_muAtomTransactions.lock();
@@ -1842,12 +1844,16 @@ void DtDb::StoreAtoms(QSqlDatabase& db, AuIdList& sectorsAdded, QList<AuTravelAt
 	g_Au.NextDbChangeGeneration();
 	AuIdList addedAtomIds(g_AuDb.m_AddedAtomIds);
 	g_AuDb.m_AddedAtomIds.clear();
+	addedAtomIdsIndex.swap(g_AuDb.m_AddedAtomIdsIndex);
 	AuIdList changedAtomIds(g_AuDb.m_ChangedAtomIds);
 	g_AuDb.m_ChangedAtomIds.clear();
+	changedAtomIdsIndex.swap(g_AuDb.m_ChangedAtomIdsIndex);
 	AuIdList deletedAtomIds(g_AuDb.m_DeletedAtomIds);
 	g_AuDb.m_DeletedAtomIds.clear();
+	deletedAtomIdsIndex.swap(g_AuDb.m_DeletedAtomIdsIndex);
 	AuIdList departedAtoms(g_AuDb.m_DepartedAtoms);
 	g_AuDb.m_DepartedAtoms.clear();
+	departedAtomsIndex.swap(g_AuDb.m_DepartedAtomsIndex);
 	QList<AuTravelAtom> departTravelers(m_DepartingTravelers);
 	m_DepartingTravelers.clear();
 	QList<AuSpawnAtom> spawnAtoms(m_SpawningAtoms);
@@ -1856,6 +1862,12 @@ void DtDb::StoreAtoms(QSqlDatabase& db, AuIdList& sectorsAdded, QList<AuTravelAt
 	m_DepartingHengeTeleport.clear();
 	m_muAtomTransactions.unlock();
 	g_AuDb.m_muAtomTransactions.unlock();
+
+	// Release the drained indexes without blocking atom change notifications.
+	addedAtomIdsIndex.clear();
+	changedAtomIdsIndex.clear();
+	deletedAtomIdsIndex.clear();
+	departedAtomsIndex.clear();
 
 	// Atoms are needed for Inserts and Updates.
 	AuEther& ether = g_Au.LockEtheriumDelete();

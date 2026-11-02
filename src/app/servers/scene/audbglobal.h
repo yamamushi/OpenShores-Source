@@ -16,6 +16,7 @@
 #include "austory.h"
 #include <QList>
 #include <QMutex>
+#include <QSet>
 
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
@@ -657,11 +658,15 @@ private:
 public:
 	// Update notifications.
 	mutable QMutex			m_muAtomTransactions;	// Guards m_HasCriticalUpdates, m_AddedAtomIds, m_ChangedAtomIds,
-													// m_DeletedAtomIds, and m_DepartedAtoms.
+													// m_DeletedAtomIds, m_DepartedAtoms, and their membership indexes.
 	AuIdList				m_AddedAtomIds;			// Atoms that have been added.
 	AuIdList				m_ChangedAtomIds;		// Atoms that have been changed.
 	AuIdList				m_DeletedAtomIds;		// Atoms that have been deleted.
 	AuIdList				m_DepartedAtoms;		// Atoms that have departed this server.
+	QSet<AuId>				m_AddedAtomIdsIndex;
+	QSet<AuId>				m_ChangedAtomIdsIndex;
+	QSet<AuId>				m_DeletedAtomIdsIndex;
+	QSet<AuId>				m_DepartedAtomsIndex;
 	bool					m_HasCriticalUpdates;	// true requires db update asap
 };
 
