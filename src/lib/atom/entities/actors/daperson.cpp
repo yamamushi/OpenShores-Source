@@ -11089,8 +11089,7 @@ DaPerson* DaPerson::LoadSubatoms(AuEther& ether, QSqlDatabase& db, const AuId& p
 	sq += ";";
 
 	QSqlQuery qa(QString(), db);
-	qa.prepare(sq);
-	if(!qa.exec())
+	if(!qa.exec(sq))
 		qWarning() << "DaPerson::LoadSubatoms FAILED. sq" << sq << "err" << qa.lastError();
 	while(qa.next())
 	{

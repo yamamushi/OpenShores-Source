@@ -1062,8 +1062,7 @@ DaAnimal* DaAnimal::LoadSubatoms(AuEther& ether, QSqlDatabase& db, const AuId& p
 		sq += " idp=" + QVariant(parentId.GetID()).toString();
 	sq += ";";
 	QSqlQuery qa(QString(), db);
-	qa.prepare(sq);
-	qa.exec();
+	qa.exec(sq);
 	while(qa.next())
 	{
 		DaAnimal *pnu = new DaAnimal;

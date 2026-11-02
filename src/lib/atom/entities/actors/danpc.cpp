@@ -615,8 +615,7 @@ DaNpc* DaNpc::LoadSubatoms(AuEther& ether, QSqlDatabase& db, const AuId& parentI
 		sq += " idp=" + QVariant(parentId.GetID()).toString();
 	sq += ";";
 	QSqlQuery qa(QString(), db);
-	qa.prepare(sq);
-	qa.exec();
+	qa.exec(sq);
 	while(qa.next())
 	{
 		DaNpc *pnu = new DaNpc;

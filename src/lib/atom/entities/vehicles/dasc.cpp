@@ -6716,8 +6716,7 @@ DaSc* DaSc::LoadSubatoms(AuEther& ether, QSqlDatabase& db, const AuId& parentId,
 		sq += " idp=" + QVariant(parentId.GetID()).toString();
 	sq += ";";
 	QSqlQuery qa(QString(), db);
-	qa.prepare(sq);
-	qa.exec();
+	qa.exec(sq);
 	while(qa.next())
 	{
 		DaSc *pnu = new DaSc;
