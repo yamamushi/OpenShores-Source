@@ -1635,7 +1635,7 @@ void DaItem::Tock(const AuTime& last, const AuTime& now, const AuScripts& script
 		if(AuTime::Now() >= DeathTime())
 		{
 			DetonateTerminate();								// BOOM!
-			tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+			tockTrans.Add(__FILE__, __LINE__, now);
 		}
 
 	if(!m_OwnerId.IsNull() && last.ElapsedSecTicks(now) > 0)
@@ -1650,7 +1650,7 @@ void DaItem::Tock(const AuTime& last, const AuTime& now, const AuScripts& script
 			if(CreatedTime().SecsTo(now) >= 5)
 				DetonateTerminate();								// BOOM!
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	DaAtom::Tock(last, now, scripts, tockTrans);
@@ -1679,7 +1679,7 @@ void DaItem::Tock(const AuTime& last, const AuTime& now, const AuScripts& script
 			}
 		}
 		m_ItemLock.unlock();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Test for solar radiation damage if my parent is a sun.
@@ -1687,7 +1687,7 @@ void DaItem::Tock(const AuTime& last, const AuTime& now, const AuScripts& script
 	if(parentStar)
 	{
 		ApplySolarRadiation(parentStar, 100000);
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(!IsStaticDisplay())
@@ -1799,7 +1799,7 @@ void DaItem::Tock(const AuTime& last, const AuTime& now, const AuScripts& script
 		if(IsInSpacecraft() || IsInAtmosphere())
 			return;
 	}
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 
 	// Decay for garbage collection.
 	if(IsInAtmosphere())
@@ -1841,7 +1841,7 @@ void DaItem::Tock(const AuTime& last, const AuTime& now, const AuScripts& script
 			return;
 		}
 	}
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 
 	// Items that are part of a story do not decay. They are removed above when their story is no longer active. That check is only
 	// made once per minute.
@@ -2065,7 +2065,7 @@ void DaItem::Tock(const AuTime& last, const AuTime& now, const AuScripts& script
 		if(decay)
 			UseItem();
 	}
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 }
 
 QString DaItem::Name() const

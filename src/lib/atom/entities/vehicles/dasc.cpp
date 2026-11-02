@@ -10549,7 +10549,7 @@ void DaSc::Tock(const AuTime& last, const AuTime& now, const AuScripts& scripts,
 		TurnOnBridgeIndicators();
 
 		m_Tocked = true;
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Tock base class and all subatoms.
@@ -10564,20 +10564,20 @@ void DaSc::Tock(const AuTime& last, const AuTime& now, const AuScripts& scripts,
 
 		// Reset landing systems after a few seconds.
 		OperateLandingSystems();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(last.IsNewPeriod(now, d_MSecPerMin, Id().GetID()))
 	{
 		FillItemSpots();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// From Think
 	if(last.ElapsedSecTicks(now))
 	{
 		OperateLifts();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 }
 

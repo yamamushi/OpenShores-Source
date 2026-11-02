@@ -421,7 +421,7 @@ void DaAnimal::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 			}
 		}
 	}
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 
 	// Remainder from Think
 	if(!IsWild() || IsMounted())
@@ -528,7 +528,7 @@ void DaAnimal::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 			}
 		}
 	}
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 }
 
 void DaAnimal::CombatApplyDamage(const AuCombatAttacker& attacker, const AuCombatWeapon& weapon, const AuPoint& wpnLoc,

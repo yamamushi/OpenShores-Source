@@ -296,7 +296,7 @@ void DaCitizen::Tock(const AuTime& last, const AuTime& now, const AuScripts& scr
 		m_GearLock.lockForRead();
 		SetItemInHand(m_Gear.ItemAt(gearPos));
 		m_GearLock.unlock();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Process dying state.
@@ -312,14 +312,14 @@ void DaCitizen::Tock(const AuTime& last, const AuTime& now, const AuScripts& scr
 		result.m_Damage1 = 1;
 
 		CombatApplyDamageLater(AuCombatAttacker(), weapon, AuPoint(0,0), AuPoint(0,0), result);
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Stop flying pose on the ground.
 	if(IsFlying() && IsMounted() && IsTouchingGround())
 	{
 		DoPose(AuPose::Stand);
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 }
 

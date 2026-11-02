@@ -3136,7 +3136,7 @@ void DaSolarSystem::Tock(const AuTime& last, const AuTime& now, const AuScripts&
 	if(!m_WormholesPositioned)
 		if(PositionWormholes())
 		{
-			tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+			tockTrans.Add(__FILE__, __LINE__, now);
 			SetModified();
 		}
 
@@ -3160,7 +3160,7 @@ void DaSolarSystem::Tock(const AuTime& last, const AuTime& now, const AuScripts&
 			else
 				epi++;								// The empire entry is fresh enough to retain it.
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 	m_EmpiresPresentLock.unlock();
 
@@ -3186,7 +3186,7 @@ void DaSolarSystem::Tock(const AuTime& last, const AuTime& now, const AuScripts&
 			// This system has been finalized and it has henge dest info in the cache. Create those henge destinations.
 			CreateHengeDestinations();
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// All solar systems must not broadcast this signal at the same time. It creates a huge lag spike.
@@ -3214,7 +3214,7 @@ void DaSolarSystem::Tock(const AuTime& last, const AuTime& now, const AuScripts&
 			//qDebug() << "DaSolarSystem::Tock" << Id() << Name() << "emitted" << p
 				//<< "detectRange" << (p/DetectionRangeFactor()+1) << "pc" << last.UTC();
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 }
 

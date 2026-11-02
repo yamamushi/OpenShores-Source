@@ -5018,12 +5018,12 @@ void DaWorldGlobe::Tock(const AuTime& last, const AuTime& now, const AuScripts& 
 	if(!IsInAnyScene())
 	{
 		InitSystemPosition();			// Do the rotation.
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 	else
 	{
 		ThinkPerformAxialRotation();	// Calculate the rotation.
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 	DaWorldSphere::Tock(last, now, scripts, tockTrans);
 }

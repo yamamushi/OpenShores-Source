@@ -1774,7 +1774,7 @@ void DaMissile::Tock(const AuTime& last, const AuTime& now, const AuScripts& scr
 		//qDebug() << "DaMissile::Tock" << Id() << Name() << "inside explode target" << m_ExplodeTarget;
 		return;							// Do nothing more once I have decided to explode.
 	}
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 
 	// Turn toward my target if I am a seeker.
 	if(!m_TargetId.IsNull())
@@ -1817,7 +1817,7 @@ void DaMissile::Tock(const AuTime& last, const AuTime& now, const AuScripts& scr
 
 		m_LastTurn.restart();
 		m_MissileLock.unlock();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 }
 

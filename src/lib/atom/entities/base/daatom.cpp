@@ -831,7 +831,7 @@ void DaAtom::Tock(const AuTime& last, const AuTime& now, const AuScripts& /*scri
 		if(IsDead())
 			return;												// Atom was destroyed.
 	}
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 
 	// Animate audio/visual effects to remove those that have grown too old to bother sending to anyone.
 	if(m_Effects)
@@ -841,14 +841,14 @@ void DaAtom::Tock(const AuTime& last, const AuTime& now, const AuScripts& /*scri
 			m_Effects->Tick();
 		m_EffectsLock.unlock();
 	}
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 
 	// Every atom in an atmosphere that is not inside a vehicle or spacecraft must test hull stress once per second.
 	if(last.ElapsedSecTicks(now))
 		if(DoesQueryEnvironment() && IsInAtmosphere() && !IsInVehicle() && !IsInsideCapsule())
 		{
 			TestHullStress();
-			tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+			tockTrans.Add(__FILE__, __LINE__, now);
 		}
 }
 

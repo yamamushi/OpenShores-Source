@@ -958,7 +958,7 @@ void DaNpc::Tock(const AuTime& last, const AuTime& now, const AuScripts& scripts
 				SetModified(NOTIFY_Database);
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 	else if(m_StoryInstance)
 	{
@@ -1019,19 +1019,19 @@ void DaNpc::Tock(const AuTime& last, const AuTime& now, const AuScripts& scripts
 					SetIndestructible(false);
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(g_Au.m_EnableTroopResupply && IsAtBd() && last.IsNewPeriod(now, d_MSecPerHr/3, Id().GetID()))
 	{
 		UpgradeEquipmentFromBd();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(last.IsNewPeriod(now, d_MSecPerMin, Id().GetID()))
 	{
 		MinuteTock();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(last.ElapsedSecTicks(now) > 0)
@@ -1050,7 +1050,7 @@ void DaNpc::Tock(const AuTime& last, const AuTime& now, const AuScripts& scripts
 		// Environment suit does not protect me from this.
 		if(IsInVisibleWater())
 			ApplyLiquidDamage();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 }
 

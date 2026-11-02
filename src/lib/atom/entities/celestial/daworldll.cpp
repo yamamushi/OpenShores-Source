@@ -1977,13 +1977,13 @@ void DaWorldLL::Tock(const AuTime& last, const AuTime& now, const AuScripts& scr
 			last.IsNewPeriod(now, d_MSecPerHr))
 	{
 		ReportOfficerAvailable();	    // Habitable world or ringworld has an officer ready. Send a notice once per hour.
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(last.IsNewPeriod(now, 10*d_MSecPerSec, Id().GetID()))
 	{
 		ConstructGeo();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 }
 

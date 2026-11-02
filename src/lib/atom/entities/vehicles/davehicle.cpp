@@ -2218,7 +2218,7 @@ void DaVehicle::Tock(const AuTime& last, const AuTime& now, const AuScripts& scr
 		SetEmpireId(humanDriverOnLine->EmpireId());	// Does nothing if empire does not change.
 		if(!IsDriverOnLine())
 			SetDriverOnLine(true);
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 	else
 		SetDriverOnLine(false);	// Driver is not on line.
@@ -2259,7 +2259,7 @@ void DaVehicle::Tock(const AuTime& last, const AuTime& now, const AuScripts& scr
 				ForceMotion();						// Start to drift in Zero-G, unless rocket parked? inside Capsule.
 			SetModified();
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Kill the throttle(s) when there are no more people in the vehicle.
@@ -2287,12 +2287,12 @@ void DaVehicle::Tock(const AuTime& last, const AuTime& now, const AuScripts& scr
 			m_ThrustVertical = 0;
 			SetModified();
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Conditions are ticked so they can periodically affect this unit.
 	TickConditions();
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 
 	// Decay for garbage collection.
 	// Decay is not applied when in spacecraft. The spacecraft will be subject
@@ -2522,7 +2522,7 @@ void DaVehicle::Tock(const AuTime& last, const AuTime& now, const AuScripts& scr
 			}
 		}
 	}
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 
 	// From Think
 	if(last.ElapsedSecTicks(now) > 0)
@@ -2532,7 +2532,7 @@ void DaVehicle::Tock(const AuTime& last, const AuTime& now, const AuScripts& scr
 		if(parentStar)
 		{
 			ApplySolarRadiation(parentStar, MaxHitPoints());
-			tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+			tockTrans.Add(__FILE__, __LINE__, now);
 		}
 	}
 }

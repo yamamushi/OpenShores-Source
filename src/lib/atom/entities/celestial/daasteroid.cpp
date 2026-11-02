@@ -792,7 +792,7 @@ void DaAsteroid::Tock(const AuTime& last, const AuTime& now, const AuScripts& sc
 		NotifyObservers(ASTEROID_DepartedDeepSpace, BODY_TYPE_Count, QString()/*na*/);
 		Kill();	// Remove asteroids that reach deep space.
 	}
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 }
 
 void DaAsteroid::CombatArmorEffectiveness(WEAPONMODE mode, WEAPONEFFECT effect, bool hitShield, const AuPoint& wpnLoc,

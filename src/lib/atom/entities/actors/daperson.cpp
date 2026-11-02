@@ -7456,7 +7456,7 @@ void DaPerson::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 		if(g_Au.m_LogMessages & LOG_Spawn)
 			qDebug() << "DaPerson::Tock" << Id() << Name() << "Respawn, forceLocal" << forceLocal;
 		Respawn(forceLocal);
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 
 		// It is probably safest to do nothing else after calling Respawn.
 		return;
@@ -7632,10 +7632,10 @@ void DaPerson::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 				ReleaseBerth();
 				Kill();
 			}
-			tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+			tockTrans.Add(__FILE__, __LINE__, now);
 			return;
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(IsOnLine())
@@ -7775,7 +7775,7 @@ void DaPerson::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 				}
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 	else
 	{
@@ -7807,7 +7807,7 @@ void DaPerson::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 		// Stop from hurtling across the universe if I am moving in deep space, i.e. subordinate to a solar system.
 		if(IsNormal() && !IsAtRest() && !IsAwaitingSpawnRecall() && dynamic_cast<DaSolarSystem*>(Parent()))
 			SetVector(AuPoint(0,0,0));
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(IsAwaitingSpawnRecall())
@@ -7827,7 +7827,7 @@ void DaPerson::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 			if(g_Au.m_LogMessages & LOG_Spawn)
 				qDebug() << "DaPerson::Tock" << Id() << Name() << "Respawn done.";
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 		return;
 	}
 
@@ -7835,7 +7835,7 @@ void DaPerson::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 	// Demiavatars do not go off line.
 	if(IsInvisibleOffLine())
 	{
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 		return;
 	}
 	// I am either on line or a demiavatar.
@@ -7857,7 +7857,7 @@ void DaPerson::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 
 	// Conditions are ticked so they can periodically affect this person, but only while they are on line.
 	TickConditions();
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 
 	if(IsAgentPowerOn())
 	{
@@ -8101,7 +8101,7 @@ void DaPerson::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 				}
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 	else
 	{
@@ -8252,7 +8252,7 @@ void DaPerson::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 				}
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Remainder from Think
@@ -8276,7 +8276,7 @@ void DaPerson::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 			if(IsInVisibleWater() && !AgentInvincible())
 				ApplyLiquidDamage();
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 }
 

@@ -35,7 +35,7 @@ public:
 	}
 
 	// Typical usage when called from Tock:
-	//  tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	//  tockTrans.Add(__FILE__, __LINE__, now);
 	inline DtTockTransaction(const char* file, int line, const AuTime& tockTime)
 	{
 		m_ElapsedMs = tockTime.ElapsedMSec();
@@ -65,7 +65,7 @@ public:
 	}
 
 public:
-	void Add(const DtTockTransaction& trans);
+	void Add(const char* file, int line, const AuTime& tockTime);
 
 	void Report(const AuId& atomId, int msElapsed) const;
 };
