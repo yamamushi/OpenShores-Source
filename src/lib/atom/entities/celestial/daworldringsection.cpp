@@ -5042,12 +5042,12 @@ void DaWorldRingSection::Tock(const AuTime& last, const AuTime& now, const AuScr
 	if(!IsInAnyScene())
 	{
 		InitSystemPosition();			// Do the rotation.
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 	else
 	{
 		ThinkPerformAxialRotation();	// Calculate the rotation.
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 	DaWorldLL::Tock(last, now, scripts, tockTrans);
 }

@@ -23228,13 +23228,13 @@ void DaSentient::Tock(const AuTime& last, const AuTime& now, const AuScripts& sc
 			if(PoseTime().ElapsedMinTicks())
 				SetGeneralPose(AuPose::SitOnGround);
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	DoAI();
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 	ExecuteDecision(msElapsed);
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 }
 
 // Do what I decided to do.

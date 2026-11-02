@@ -14491,7 +14491,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 	// Close automatic doors that are open when nobody is near them.
 	// Every other second is often enough.
 	CloseAutomaticDoors();
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 
 	// Kick loose from 'at rest' state when appropriate.
 	if(StartMoving())
@@ -14499,7 +14499,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 
 	// Conditions are ticked so they can periodically affect this unit.
 	TickConditions();
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 
 	// The capacitor needs to be cycled to generate power, even on nu ships. When a person sits at the helm of a 'nu' ship,
 	// turning on the power plant does not unset the 'nu' state. The capacitor must start charging though.
@@ -14536,14 +14536,14 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 					DecayMoveActions();
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Report my position to the master server every 10 minutes, for the star map.
 	if(last.IsNewPeriod(now, d_MSecPerSec*10*60, Id().GetID()))
 	{
 		ReportPosition();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// The scene server needs to know what channels are being monitored by atoms. This is done using the global data object.
@@ -14621,7 +14621,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 		}
 
 		// Remaining actions are not performed on "nu" spacecraft.
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 		return;
 	}
 
@@ -14638,7 +14638,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 		const DaStar* parentStar = dynamic_cast<const DaStar*>(Parent());
 		if(parentStar)
 			ApplySolarRadiation(parentStar, DesignHitsStructural());
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Remaining actions are not performed in the design environment.
@@ -14708,7 +14708,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 				}
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(last.ElapsedHourTicks(now) > 0 && !IsPirate() && !InArena())
@@ -14722,7 +14722,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 			pmyss = dynamic_cast<DaSolarSystem*>(FindEnvironmentAtom());
 		if(pmyss)
 			pmyss->SetNonPirateShipPresent(HighestSystemQuality());
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(last.ElapsedMinTicks(now) > 0)
@@ -14895,7 +14895,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 				}
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Check for pirate encounter.
@@ -14922,7 +14922,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 				pmyss->PirateEncounter(this, false);
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(IsSpaceStation())
@@ -14958,7 +14958,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 					SendSOS(1, "", (int)CapacitorPercent());	// Station Fuel
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 	else if(IsCommandedByAI() || IsPilotMannedByAI())
 	{
@@ -14986,7 +14986,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 					SendSOS(5, "", (int)CapacitorPercent());	// Ship Fuel
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Reconcile the roster of AI-controlled ships once per day.
@@ -15015,7 +15015,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 					ATCContact(pmyss);
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Decay for garbage collection.
@@ -15067,7 +15067,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 				}
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Decay is not applied while in space and under power. If this guy runs out of power, it will crash somewhere, which will
@@ -15464,7 +15464,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 			CombatApplyDamage(attacker, weapon, AuPoint(0,0), AuPoint(0,0), result);
 		}
 	}
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 
 	// Remainder from Think
 	if(secCycles == 0)
@@ -15489,7 +15489,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 				curOrder == AuMissionOrder::HarvestWell ||
 				curOrder == AuMissionOrder::HarvestParticles)
 			ConfigureHarvester();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Repairs. Count down seconds until repairs are completed.
@@ -15507,7 +15507,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 	m_BayLock.unlock();
 	if(v)
 		CycleBayWeapons();
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 
 	// Tick games.
 	if(IsInAnyScene())
@@ -15517,7 +15517,7 @@ void DaVessel::Tock(const AuTime& last, const AuTime& now, const AuScripts& scri
 		else if(last.SecIsEven())
 			GamesTick(false);			// Every even second is often enough for the game to tick.
 	}
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 }
 
 void DaVessel::CheckTrespass(float sensorRange)

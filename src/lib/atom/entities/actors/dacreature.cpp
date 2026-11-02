@@ -1199,7 +1199,7 @@ void DaCreature::Tock(const AuTime& last, const AuTime& now, const AuScripts& sc
 		else
 			m_Animalia->Init();				// NOTE: Does not clear "needs init" state of creature.
 		m_BodyLock.unlock();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Server needs to know the current gun model CID for effect placement.
@@ -1221,7 +1221,7 @@ void DaCreature::Tock(const AuTime& last, const AuTime& now, const AuScripts& sc
 			if(llworld->IsHengeTeleportLocation(Location(), fromSysId, fromSun, fromArc, shadowPanels, destSysId, destSun, destArc))
 				HengeTeleport(fromSysId, fromSun, fromArc, shadowPanels, destSysId, destSun, destArc);
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Body heals one point per hour naturally, when not starving or dying.
@@ -1239,7 +1239,7 @@ void DaCreature::Tock(const AuTime& last, const AuTime& now, const AuScripts& sc
 					curhits++;
 					SetHitPoints(curhits);
 					SetModified();
-					tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+					tockTrans.Add(__FILE__, __LINE__, now);
 				}
 			}
 		}
@@ -1266,7 +1266,7 @@ void DaCreature::Tock(const AuTime& last, const AuTime& now, const AuScripts& sc
 			if(IsOnGround())
 				ForceMotion();	// So I will adjust to the terrain.
 			SetModified();
-			tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+			tockTrans.Add(__FILE__, __LINE__, now);
 		}
 	}
 
@@ -1425,7 +1425,7 @@ void DaCreature::Tock(const AuTime& last, const AuTime& now, const AuScripts& sc
 				}
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 }
 

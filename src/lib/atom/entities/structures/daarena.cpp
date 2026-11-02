@@ -808,7 +808,7 @@ void DaArena::Tock(const AuTime& last, const AuTime& now, const AuScripts& scrip
 		}
 		*/
 	}
-	tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+	tockTrans.Add(__FILE__, __LINE__, now);
 }
 
 // Render circular nav beacon for stations.

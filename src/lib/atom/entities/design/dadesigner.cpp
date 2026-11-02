@@ -1610,7 +1610,7 @@ void DaDesigner::Tock(const AuTime& last, const AuTime& now, const AuScripts& sc
 	if(!FindPersonRecursive())
 	{
 		Kill();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 }
 

@@ -318,7 +318,7 @@ void DaUnit::Tock(const AuTime& last, const AuTime& now, const AuScripts& script
 	if(system)
 	{
 		system->SetEmpirePresent(EmpireId());
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(last.ElapsedMinTicks(now) > 0)
@@ -333,7 +333,7 @@ void DaUnit::Tock(const AuTime& last, const AuTime& now, const AuScripts& script
 			m_UnitDamage.Decay();
 			m_UnitLock.unlock();
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 }
 

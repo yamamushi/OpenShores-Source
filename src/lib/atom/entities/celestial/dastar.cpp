@@ -2907,7 +2907,7 @@ void DaStar::Tock(const AuTime& last, const AuTime& now, const AuScripts& script
 					CreateRingworldHenges();	// Ring sections create henges and signal their destinations to reciprocate.
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	m_StarLock.lockForWrite();
@@ -2942,7 +2942,7 @@ void DaStar::Tock(const AuTime& last, const AuTime& now, const AuScripts& script
 
 		// Notify client.
 		SetModified(NOTIFY_Scene);	// Stargates are not stored in the db.
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 	else
 		m_StarLock.unlock();

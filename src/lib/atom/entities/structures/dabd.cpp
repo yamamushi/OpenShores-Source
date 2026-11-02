@@ -10668,7 +10668,7 @@ void DaBd::Tock(const AuTime& last, const AuTime& now, const AuScripts& scripts,
 
 		//qDebug() << "DaCapsule::Tock" << Id() << Name() << "design" << m_idDesign << "now valid.";
 		m_Tocked = true;
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Tock base class and all subatoms.
@@ -10683,7 +10683,7 @@ void DaBd::Tock(const AuTime& last, const AuTime& now, const AuScripts& scripts,
 			ImportMinutePower(system);	// Power is imported even when under construction for lighting.
 		if(IsBurning())
 			CallFireStation();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(last.IsNewPeriod(now, 10*d_MSecPerSec, Id().GetID()))
@@ -10719,7 +10719,7 @@ void DaBd::Tock(const AuTime& last, const AuTime& now, const AuScripts& scripts,
 		if(canOperate)
 			EmployWorkers();
 		RunManufacturingProcesses(canOperate);
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Remaining activities are not performed while this building is under construction.
@@ -10764,7 +10764,7 @@ void DaBd::Tock(const AuTime& last, const AuTime& now, const AuScripts& scripts,
 			if(system)
 				CheckTrespass(system, sensorRange);
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 	else if(last.IsNewPeriod(now, 6*d_MSecPerMin, Id().GetID()))
 	{
@@ -10775,7 +10775,7 @@ void DaBd::Tock(const AuTime& last, const AuTime& now, const AuScripts& scripts,
 		UnemployWorkers();
 		if(IndustryId() == IID_Observatory)
 			ObserveAsteroids();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(newMinPeriod)
@@ -10848,7 +10848,7 @@ void DaBd::Tock(const AuTime& last, const AuTime& now, const AuScripts& scripts,
 			DamageAndDestroy(tr("Exposed to intolerable environment."));
 			return;
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(last.ElapsedSecTicks(now) > 0)
@@ -10909,28 +10909,28 @@ void DaBd::Tock(const AuTime& last, const AuTime& now, const AuScripts& scripts,
 				break;
 			}
 		}
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Weapons are operated every few seconds.
 	if(IndustryId() == IID_BaseWeapon && Workers() && last.IsNewPeriod(now, 5*d_MSecPerSec, Id().GetID()))
 	{
 		WorkerOperateWeapon();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	// Turrets are operated every few seconds.
 	if(IndustryId() == IID_BaseGuardTower && Workers() && last.IsNewPeriod(now, 3*d_MSecPerSec, Id().GetID()))
 	{
 		WorkerOperateTurret();
-		tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+		tockTrans.Add(__FILE__, __LINE__, now);
 	}
 
 	if(IndustryId() == IID_Broker || IndustryId() == IID_AirportTerminal || IndustryId() == IID_BaseAirTerminal)
 		if(last.IsNewPeriod(now, 15*d_MSecPerMin, Id().GetID()))
 		{
 			MonitorCommChannels();
-			tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+			tockTrans.Add(__FILE__, __LINE__, now);
 		}
 }
 

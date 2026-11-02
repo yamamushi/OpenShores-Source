@@ -18,12 +18,12 @@ void DtTockTransaction::Report(const AuId& atomId) const
 
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
-void DtTockTransactions::Add(const DtTockTransaction& trans)
+void DtTockTransactions::Add(const char* file, int line, const AuTime& tockTime)
 {
-	// When disabled we do not add transactions.
+	// Avoid timestamp and message construction when tracing is disabled.
 	if(!(g_Au.m_DebugSwitches & 0x01000000))
 		return;
-	m_Actions.append(trans);
+	m_Actions.append(DtTockTransaction(file, line, tockTime));
 }
 
 void DtTockTransactions::Report(const AuId& atomId, int msElapsed) const
@@ -81,16 +81,16 @@ void DtTock::run()
 				const AuScripts* scripts = g_Au.LockScripts();
 				tockAtom->Tock(tockAtom->TockTime(), now, *scripts, tockTrans);
 				g_Au.UnlockScripts();
-				tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+				tockTrans.Add(__FILE__, __LINE__, now);
 				if(tockAtom->IsDead())
 				{
 					ether->TrashAtom(tockAtomId);	// The atom died.
-					tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+					tockTrans.Add(__FILE__, __LINE__, now);
 				}
 				else
 				{
 					tockAtom->TickTock();
-					tockTrans.Add(DtTockTransaction(__FILE__, __LINE__, now));
+					tockTrans.Add(__FILE__, __LINE__, now);
 				}
 
 				// Use the unlock that updates the tock time statistics for the atom.
