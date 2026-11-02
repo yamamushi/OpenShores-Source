@@ -1623,8 +1623,10 @@ void DtSceneServer::SyncClient()
 	int bufendsz = m_TxBuffer.count();
 	m_muTxBuffer.unlock();
 
+	// Retain the completed scene list without copying its entries.
+	m_SyncLastAtomIds.swap(atomsInScene);
+
 	// Remember statistics
-	m_SyncLastAtomIds = atomsInScene;
 	unsigned int syncsize = bufendsz - bufstartsz;				// bytes in this refresh
 	m_SyncCount++;												// total refreshes so far
 	quint32 syncLastIndex = m_SyncCount%c_SyncHistory;
