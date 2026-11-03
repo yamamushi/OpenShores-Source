@@ -12,7 +12,6 @@
 
 uniform vec4							glowAlpha;				// Glow color added to lit color(rgb). Alpha of vertColor(a).
 #ifndef PER_PIXEL_LIGHTING
-uniform LightSources					light;					// Light sources.
 #endif
 uniform mat4							mv;						// Model view matrix.
 uniform mat4							p;						// Projection matrix.
@@ -83,7 +82,7 @@ void main()
 	vertLitP = gl_Position.xyz;
 	vertLitN = eyeN.xyz;
 #else
-	vertColor = vec4(computeLighting(light, positionShine.w, normalReflect.w, gl_Position.xyz, eyeN.xyz),
+	vertColor = vec4(computeLighting( positionShine.w, normalReflect.w, gl_Position.xyz, eyeN.xyz),
 			glowAlpha.a * dyeColorAlpha.a);
 #endif
 

@@ -44,6 +44,9 @@ struct LightSources
 	SunLight							sun2;
 };
 
+uniform LightSources light;
+uniform int pointLightEnd;
+
 #ifdef SHADOWS
 #define MAX_SHADOW_BODIES 8
 uniform int								shadowBodyCount;
@@ -284,8 +287,7 @@ void computePointLight(PointLight light,
 	oSpecular = light.color * specular * attenuation * reflectiveness;
 }
 
-vec3 computeLighting(LightSources light,
-			float shininess,
+vec3 computeLighting(float shininess,
 			float reflectiveness,
 			vec3 P,
 			vec3 N)
@@ -322,7 +324,7 @@ vec3 computeLighting(LightSources light,
 	}
 
 	// Point lights
-	for(int l=0; l<MAX_LIGHTS; l++)
+	for(int l=0; l<MAX_LIGHTS && l<pointLightEnd; l++)
 	{
 		if(light.light[l].enabled)
 		{

@@ -153,7 +153,7 @@ vec3 computeLighting(LightSources light,
 uniform float							fogDensity;				// Fog density for exponential fog calculation.
 uniform LightSources					light;					// Light sources.
 uniform mat4							mv;						// Model view matrix.
-uniform vec3							offset;					// Position offset for incoming snowflake vertices.
+uniform samplerBuffer							offsets;					// Position offset for incoming snowflake vertices.
 uniform mat4							p;						// Projection matrix.
 uniform float							size;					// Base size of points.
 
@@ -165,6 +165,7 @@ out vec3								vertTexCoordFog;		// Outgoing tex coord(xy) and fog density(z)
 
 void main()
 {
+	vec3 offset = texelFetch(offsets, gl_InstanceID).xyz;
 	gl_Position = mv * vec4(offset,1);							// Snow flake position using model view matrix.
 	gl_Position.xy += position.xy*size;							// Corner of snow flake in model space.
 	gl_Position = p * gl_Position;								// Corner of snow flake in eye space.

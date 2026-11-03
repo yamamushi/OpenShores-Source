@@ -4,6 +4,7 @@
 // All rights reserved.
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
+#include "augpuprofile.h"
 #include "daatom.h"
 //
 #include "auatomrenderinfo.h"
@@ -8028,6 +8029,7 @@ void DaAtom::RenderSc(const AuMatrix4x4& projection, AuAtomRenderInfo& ari, AuMo
 		const DaPerson* sceneAtom, DaAtomList& shadSc, DaAtomList& shadScFog, DaAtomList& shadScGlobe, DaAtomList& shadScGlobeFog,
 		DaAtomList& shadScRingworld, DaAtomList& shadScRingworldFog, RENDERPASS pass)
 {
+	AuGpuProfile gpuProfile("geometry");
 	if(!shadSc.empty())
 	{
 		ari.re->GLSL().ScShader().Select(projection, *ari.re);

@@ -9,7 +9,6 @@
 #ifdef PER_PIXEL_LIGHTING
 #SunLightRingworld
 
-uniform LightSources					light;
 #endif
 
 uniform float							effectApply;			// How to apply the effect texture: 1=lit by env, 2=unlit(glows)
@@ -77,7 +76,7 @@ void main()
 	// Modulate with lighting and effects.
 	float appl = vertTexIndex.y*effectApply;
 #ifdef PER_PIXEL_LIGHTING
-	vec4 vertColor = vec4(computeLighting(light, vertLitShininess, vertLitReflectiveness, vertLitP, normalize(vertLitN)), 1) * vertLitScale;
+	vec4 vertColor = vec4(computeLighting( vertLitShininess, vertLitReflectiveness, vertLitP, normalize(vertLitN)), 1) * vertLitScale;
 	vertColor.rgb = mix(vertColor.rgb, vec3(1,1,1), vertLitGlowSelfIllum.w);
 	vertColor.rgb = min(vertColor.rgb + vertLitGlowSelfIllum.rgb, vec3(1., 1., 1.));
 #endif

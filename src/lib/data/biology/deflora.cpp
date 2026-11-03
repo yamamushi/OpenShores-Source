@@ -1,3 +1,4 @@
+#include "auindexedmesh.h"
 #include <cstddef>
 #include <unordered_map>
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
@@ -7,6 +8,7 @@
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
 #include "deflora.h"
+#include "auframetiming.h"
 #include "floratypes.h"
 //
 #include "audice.h"
@@ -1343,6 +1345,7 @@ void DeFlora::MakeBranchingBranch(DhPlantBranches& branches, DhPlantNode& node,
 void DeFlora::CreateVAO(AuOpenGLFunctions& GLf, AuGLVAO& vao, unsigned int textureIndex, TYPE type, const AuDice& dice,
 		int lod, float maxRadius) const
 {
+	AuFrameTiming::Scope timing(AuFrameTiming::FloraMesh);
 	// Create surface triangles of the VAO. This portion does not need the OpenGL context so it could be done by a different thread.
 	QList<AuFloraVAOTri> tris;
 	CreateVAOTriangles(tris, textureIndex, type, dice, lod, maxRadius);
@@ -1411,6 +1414,7 @@ void DeFlora::CreateIndexedVAOFromTriangles(AuOpenGLFunctions& GLf, AuGLVAO& vao
 		v.n[3] = 0;
 	}
 	vao.CreateGL(GLf, vertices, 3);
+	vao.SetFloraBounds(pos.constData(), tex.constData()+2, vertices);
 	vao.SelectGL();
 	GLf.glBindBuffer(GL_ARRAY_BUFFER, vao.Buffer(0));
 	GLf.glBufferData(GL_ARRAY_BUFFER, packed.count() * sizeof(Packed), packed.constData(), GL_STATIC_DRAW);
@@ -1477,8 +1481,13 @@ void DeFlora::CreateVAOFromTriangles(AuOpenGLFunctions& GLf, AuGLVAO& vao, const
 		vaoTex[vaoTexIdx++] = (*ti).m_V2.m_MoveFactor;
 	}
 
+	QVector<GLuint> indices;
+	vertices = AuIndexVertexStreams<9>(vertices, {{vaoPos,3}, {vaoN,3}, {vaoTex,3}}, indices);
+	vaoPosIdx = vaoNIdx = vaoTexIdx = vertices*3;
+
 	// Generate vertex array(s) for this object. We only need one.
 	vao.CreateGL(GLf, vertices, 3);
+	vao.SetFloraBounds(vaoPos, vaoTex+2, vertices);
 
 	// Select vertex array to construct.
 	vao.SelectGL();
@@ -1502,6 +1511,7 @@ void DeFlora::CreateVAOFromTriangles(AuOpenGLFunctions& GLf, AuGLVAO& vao, const
 
 	// Disable the vertex array object.
 	vao.DeselectGL();
+	vao.SetIndices(indices);
 
 	delete [] vaoPos;
 	delete [] vaoN;

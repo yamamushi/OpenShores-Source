@@ -12,7 +12,6 @@
 #endif
 #SunLight
 
-uniform LightSources					light;
 uniform vec4							glowAlpha;
 #endif
 
@@ -139,7 +138,7 @@ void main()
 	clothingColor.a = 1;
 
 #ifdef PER_PIXEL_LIGHTING
-	vec4 vertColor = vec4(computeLighting(light, vertLitShininess, vertLitReflectiveness * PER_PIXEL_CLOTH_GLOSS, vertLitP, normalize(vertLitN)), 1) * vertLitScale;
+	vec4 vertColor = vec4(computeLighting( vertLitShininess, vertLitReflectiveness * PER_PIXEL_CLOTH_GLOSS, vertLitP, normalize(vertLitN)), 1) * vertLitScale;
 	vertColor.rgb = min(vertColor.rgb + glowAlpha.rgb, vec3(1.5, 1.5, 1.5));
 #endif
 	// Final color is modulated with incoming vertex color, for lighting.

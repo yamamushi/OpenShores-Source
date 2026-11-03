@@ -45,6 +45,10 @@ struct LightSources
 	SunLight							sun2;
 };
 
+// Keep the light array in uniform storage while evaluating lighting.
+uniform LightSources light;
+uniform int pointLightEnd;
+
 void computeSunLight(SunLight sun,
 			vec3 P,
 			vec3 N,
@@ -101,8 +105,7 @@ void computePointLight(PointLight light,
 	oDiffuse = light.color * lighting * attenuation;
 }
 
-vec3 computeLighting(LightSources light,
-			vec3 P,
+vec3 computeLighting(vec3 P,
 			vec3 N,
 			float city,
 			float vegDensity)
@@ -137,7 +140,7 @@ vec3 computeLighting(LightSources light,
 	}
 
 	// Point lights
-	for(int l=0; l<MAX_LIGHTS; l++)
+	for(int l=0; l<MAX_LIGHTS && l<pointLightEnd; l++)
 	{
 		if(light.light[l].enabled)
 		{
@@ -181,9 +184,6 @@ vec3 computeLighting(LightSources light,
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
 uniform float							fogDensity;				// Fog density for exponential fog calculation.
-#ifndef PER_PIXEL_LIGHTING
-uniform LightSources					light;					// Light sources.
-#endif
 uniform mat4							p;						// Projection matrix.
 uniform mat4							mv;						// Model view matrix.
 
@@ -219,7 +219,7 @@ void main()
 	vertLitCity = paveCity.y;
 	vertLitVegDensity = texCoordAltVeg.w;
 #else
-	vertColor = vec4(computeLighting(light, position.xyz, normal.xyz, paveCity.y, texCoordAltVeg.w), 1);
+	vertColor = vec4(computeLighting(position.xyz, normal.xyz, paveCity.y, texCoordAltVeg.w), 1);
 #endif
 
 	// Calculate fog density but save the effect for the fragment program.

@@ -46,6 +46,9 @@ struct LightSources
 	SunLight							sun2;
 };
 
+// Keep the light array in uniform storage while evaluating lighting.
+uniform LightSources light;
+
 void computeSunLight(SunLight sun,
 			float shininess,
 			vec3 P,
@@ -119,8 +122,7 @@ void computePointLight(PointLight light,
 	oSpecular = light.color * specular * attenuation;
 }
 
-vec3 computeLighting(LightSources light,
-			float shininess,
+vec3 computeLighting(float shininess,
 			vec3 P,
 			vec3 N)
 {
@@ -197,9 +199,6 @@ vec3 computeLighting(LightSources light,
 
 uniform float							fogDensity;				// Fog density for exponential fog calculation.
 uniform vec4							glowAlpha;				// Glow color added to lit color(rgb). Alpha of vertColor(a).
-#ifndef PER_PIXEL_LIGHTING
-uniform LightSources					light;					// Light sources.
-#endif
 uniform mat4							mv;						// Model view matrix.
 uniform mat4							p;						// Projection matrix.
 
@@ -230,7 +229,7 @@ void main()
 	vertLitP = gl_Position.xyz;
 	vertLitN = eyeN.xyz;
 #else
-	vertColor = vec4(computeLighting(light, texCoordShine.z, gl_Position.xyz, eyeN.xyz), glowAlpha.a);
+	vertColor = vec4(computeLighting(texCoordShine.z, gl_Position.xyz, eyeN.xyz), glowAlpha.a);
 	vertColor.rgb = min(vertColor.rgb + glowAlpha.rgb, vec3(1.5, 1.5, 1.5));
 #endif
 

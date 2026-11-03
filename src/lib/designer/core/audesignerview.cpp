@@ -4,6 +4,7 @@
 // All rights reserved.
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
+#include "augpuprofile.h"
 #include "audesignerview.h"
 //
 #include "aubddesignprops.h"
@@ -1722,6 +1723,13 @@ void AuSprite::Move(float speed)
 
 AuDesignerView::AuDesignerView(QWidget* parent) : QOpenGLWidget(parent), m_SceneEther("AuDesignerView")
 {
+	if(AuFrameTiming::Enabled())
+	{
+		auto* recorder=new AuFrameTiming::Recorder(this,g_Au.CacheApp());
+		setProperty("openshoresFrameTiming",QVariant::fromValue<QObject*>(recorder));
+		connect(this,&QOpenGLWidget::frameSwapped,recorder,[recorder]() { recorder->Swapped(); });
+	}
+
 	m_MM = new AuGLModelMaker(!auApp->IsSingleUserDesignerMode());
 	m_ModelCache = new AuGLModelCache();
 	m_RenderInfo = new AuAtomRenderInfo(this, auApp->Sound(), *m_MM, *m_ModelCache, g_AuClient.FontAtom());
@@ -2120,8 +2128,14 @@ void AuDesignerView::initializeGL()
 
 void AuDesignerView::paintGL()
 {
+	auto* recorder=AuFrameTiming::Enabled() ? static_cast<AuFrameTiming::Recorder*>(property("openshoresFrameTiming").value<QObject*>()) : 0;
+	AuFrameTiming::Frame frameTiming(recorder,AuRenderCounters::s_DrawCalls,AuRenderCounters::s_Vertices);
+	AuGpuFrameProfile gpuProfile;
 	if(m_RenderInfo && m_RenderInfo->re)
+	{
+		AuFrameTiming::Scope timing(AuFrameTiming::ShaderCheck);
 		m_RenderInfo->re->GLSL().RebuildIfStale();
+	}
 	bool showWait = m_bWaitingForScene || m_SceneAtomTransition || !auApp->IsSceneConnected();
 
 	//qDebug() << "AuDesignerView::paintGL";
@@ -2168,6 +2182,7 @@ void AuDesignerView::paintGL()
 
 	// Repaint the display.
 	update();
+	frameTiming.End(AuRenderCounters::s_DrawCalls,AuRenderCounters::s_Vertices);
 	//qDebug() << "AuDesignerView::paintGL done";
 }
 
@@ -2175,15 +2190,17 @@ void AuDesignerView::RenderScene()
 {
 	if(m_RenderPaused)
 		return;
-	SyncScene();									// Sync in this thread, with current gl context.
-	AnimateScene();									// Position everybody for the snapshot and reset the scene animate time.
+	{ AuFrameTiming::Scope timing(AuFrameTiming::Sync); SyncScene(); }									// Sync in this thread, with current gl context.
+	{ AuFrameTiming::Scope timing(AuFrameTiming::Animate); AnimateScene(); }									// Position everybody for the snapshot and reset the scene animate time.
 	DaPerson* sceneAtom;
-	if(StartScene(&sceneAtom))						// Prepare devices for scene rendering and lock the scene atom.
+	bool started;
+	{ AuFrameTiming::Scope timing(AuFrameTiming::Prepare); started=StartScene(&sceneAtom); }
+	if(started)						// Prepare devices for scene rendering and lock the scene atom.
 	{
 		// We have a scene atom.
-		CreateDeviceObjects(sceneAtom);				// Tell atoms to create scene data they need.
+		{ AuFrameTiming::Scope timing(AuFrameTiming::Prepare); CreateDeviceObjects(sceneAtom); }				// Tell atoms to create scene data they need.
 		RenderScene(sceneAtom);						// Render the objects in the scene.
-		FinishScene();								// Unlock the scene atom.
+		{ AuFrameTiming::Scope timing(AuFrameTiming::Finish); FinishScene(); }								// Unlock the scene atom.
 		ShowOrderLoc();
 	}
 }
@@ -15332,6 +15349,7 @@ void AuDesignerView::DesignerPreviewPeople()
 
 void AuDesignerView::RenderControlButtons()
 {
+	AuGpuProfile gpuProfile("controls");
 	bool renderButtons = true;
 	if(!g_AuClient.ViewActionButtons())
 		renderButtons = false;

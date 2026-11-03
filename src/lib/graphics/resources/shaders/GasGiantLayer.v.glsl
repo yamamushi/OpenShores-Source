@@ -45,6 +45,10 @@ struct LightSources
 	SunLight							sun2;
 };
 
+// Keep the light array in uniform storage while evaluating lighting.
+uniform LightSources light;
+uniform int pointLightEnd;
+
 void computeSunLight(SunLight sun,
 			vec3 eyeP,
 			float shininess,
@@ -110,8 +114,7 @@ void computePointLight(PointLight light,
 	oDiffuse = light.color * lighting * attenuation;
 }
 
-vec3 computeSolarLighting(LightSources light,
-			float shininess,
+vec3 computeSolarLighting(float shininess,
 			vec3 P,
 			vec3 N)
 {
@@ -147,7 +150,7 @@ vec3 computeSolarLighting(LightSources light,
 	}
 
 	// Point lights
-	for(int l=0; l<MAX_LIGHTS; l++)
+	for(int l=0; l<MAX_LIGHTS && l<pointLightEnd; l++)
 	{
 		if(light.light[l].enabled)
 		{
@@ -181,9 +184,6 @@ vec3 computeSolarLighting(LightSources light,
 uniform vec4							atmColor;				// Atmosphere color modulates texture color.
 uniform float							atmRadius;				// Atmosphere radius.
 uniform mat4							pmv;					// Projection model view matrix.
-#ifndef PER_PIXEL_LIGHTING
-uniform LightSources					light;					// Light sources.
-#endif
 
 in vec3									position;				// Incoming vertex location.
 in vec3									normal;					// Incoming vertex normal.
@@ -207,7 +207,7 @@ void main()
 	vertLitP = posRad;
 	vertLitN = normal;
 #else
-	vertColor = vec4(computeSolarLighting(light, 150, posRad, normal), 1) * atmColor;
+	vertColor = vec4(computeSolarLighting(150, posRad, normal), 1) * atmColor;
 	vertColor.a *= texCoordAlpha.z;
 #endif
 

@@ -5,6 +5,8 @@
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
 #include "auglsl.h"
+#include "auframetiming.h"
+#include "auindexedmesh.h"
 //
 #include "augleffects.h"
 #include "auglslerr.h"
@@ -14,6 +16,8 @@
 #include <QGuiApplication>
 #include <QFile>
 
+int AuShadowTextureLayout::FragmentUnits = 32;
+
 const bool s_DebugGLSL = false;									// Set true to see debug messages generated in this file.
 
 // Compressed source loaded from glsl.har. Only contains data during Initialize.
@@ -21,8 +25,46 @@ QHash<QString, QByteArray>	s_GLSLProgramSrc;
 
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
+void AuGLVAO::DrawVisibleGL(const AuViewClip& clip, float minRadius, float maxRadius) const
+{
+	for(GLuint buffer=0; buffer<m_BufferCount; buffer++)
+		m_GLf->glEnableVertexAttribArray(buffer);
+	const bool bounded = m_ViewRanges.DrawVisible(clip, minRadius, maxRadius, [&](int first, int count)
+	{
+		if(m_Indices)
+			m_GLf->glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, reinterpret_cast<const void*>(size_t(first)*sizeof(GLuint)));
+		else
+			m_GLf->glDrawArrays(GL_TRIANGLES, first, count);
+		AuRenderCounters::s_DrawCalls++;
+		AuRenderCounters::s_Vertices += count;
+	});
+	for(GLuint buffer=0; buffer<m_BufferCount; buffer++)
+		m_GLf->glDisableVertexAttribArray(buffer);
+	if(!bounded) DrawGL();
+}
+
+void AuGLVAO::SetFloraBounds(const float* positions, const float* movement, int count)
+{
+	m_FloraBoundsValid = false;
+	m_FloraMove = 0;
+	if(count<=0) return;
+	m_FloraMin = m_FloraMax = AuPoint(positions[0],positions[1],positions[2]);
+	for(int i=0; i<count; i++)
+	{
+		const float* p = positions+i*3;
+		float move = movement ? movement[i*3] : 0.f;
+		if(!std::isfinite(p[0]) || !std::isfinite(p[1]) || !std::isfinite(p[2]) || !std::isfinite(move)) return;
+		m_FloraMin.x = qMin(m_FloraMin.x,double(p[0])); m_FloraMax.x = qMax(m_FloraMax.x,double(p[0]));
+		m_FloraMin.y = qMin(m_FloraMin.y,double(p[1])); m_FloraMax.y = qMax(m_FloraMax.y,double(p[1]));
+		m_FloraMin.z = qMin(m_FloraMin.z,double(p[2])); m_FloraMax.z = qMax(m_FloraMax.z,double(p[2]));
+		m_FloraMove = qMax(m_FloraMove,float(std::fabs(move)));
+	}
+	m_FloraBoundsValid = true;
+}
+
 void AuGLVAO::CreateForLines(AuOpenGLFunctions& GLf, const AuPointArray& verts, bool closeBoundary, GLenum usage)
 {
+	AuFrameTiming::Scope timing(AuFrameTiming::Mesh);
 	if(verts.isEmpty())
 		return;
 
@@ -81,8 +123,57 @@ void AuGLVAO::CreateForLines(AuOpenGLFunctions& GLf, const AuPointArray& verts, 
 	delete [] position;
 }
 
+void AuGLVAO::UpdateTextQuad(AuOpenGLFunctions& GLf, const AuPoint& ll, const AuPoint& ul,
+		const AuPoint& ur, const AuPoint& lr)
+{
+	AuFrameTiming::Scope timing(AuFrameTiming::BufferUpdate);
+	if(!VAO())
+	{
+		CreateGL(GLf, 6, 2);
+		SelectGL();
+		const GLfloat uv[] = {0,0, 0,1, 1,1, 1,1, 1,0, 0,0};
+		GLf.glBindBuffer(GL_ARRAY_BUFFER, Buffer(1));
+		GLf.glBufferData(GL_ARRAY_BUFFER, sizeof(uv), uv, GL_STATIC_DRAW);
+		GLf.glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
+	}
+	else
+		SelectGL();
+	const AuPoint* corners[] = {&ll, &ul, &ur, &ur, &lr, &ll};
+	GLfloat positions[18];
+	for(int i=0; i<6; i++)
+	{
+		positions[i*3] = GLfloat(corners[i]->x);
+		positions[i*3+1] = GLfloat(corners[i]->y);
+		positions[i*3+2] = GLfloat(corners[i]->z);
+	}
+	GLf.glBindBuffer(GL_ARRAY_BUFFER, Buffer(0));
+	GLf.glBufferData(GL_ARRAY_BUFFER, sizeof(positions), 0, GL_STREAM_DRAW);
+	GLf.glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(positions), positions);
+	GLf.glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	GLf.glBindBuffer(GL_ARRAY_BUFFER, 0);
+	DeselectGL();
+}
+
+void AuGLVAO::UpdateParticleStream(AuOpenGLFunctions& GLf, const QVector<GLfloat>& verts)
+{
+	AuFrameTiming::Scope timing(AuFrameTiming::BufferUpdate);
+	Q_ASSERT(verts.size() % 4 == 0);
+	if(!VAO())
+		CreateGL(GLf, 0, 1);
+	m_Vertices = verts.size() / 4;
+	SelectGL();
+	GLf.glBindBuffer(GL_ARRAY_BUFFER, Buffer(0));
+	// Orphan the previous store: it may still be consumed by an earlier draw.
+	GLf.glBufferData(GL_ARRAY_BUFFER, verts.size()*sizeof(GLfloat), 0, GL_STREAM_DRAW);
+	GLf.glBufferSubData(GL_ARRAY_BUFFER, 0, verts.size()*sizeof(GLfloat), verts.constData());
+	GLf.glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
+	GLf.glBindBuffer(GL_ARRAY_BUFFER, 0);
+	DeselectGL();
+}
+
 void AuGLVAO::CreateForSprites(AuOpenGLFunctions& GLf, const QList<AuPointAlpha>& verts, GLenum usage)
 {
+	AuFrameTiming::Scope timing(AuFrameTiming::Mesh);
 	if(verts.isEmpty())
 		return;
 
@@ -127,6 +218,7 @@ void AuGLVAO::CreateForSprites(AuOpenGLFunctions& GLf, const QList<AuPointAlpha>
 
 void AuGLVAO::CreateForSpriteSizeColor(AuOpenGLFunctions& GLf, const QList<AuScPoint>& verts, GLenum usage)
 {
+	AuFrameTiming::Scope timing(AuFrameTiming::Mesh);
 	if(verts.isEmpty())
 		return;
 
@@ -185,6 +277,7 @@ void AuGLVAO::CreateForSpriteSizeColor(AuOpenGLFunctions& GLf, const QList<AuScP
 
 void AuGLVAO::CreateForSc(AuOpenGLFunctions& GLf, const AuScTriRenderList& tris, GLenum usage, quint8 effect)
 {
+	AuFrameTiming::Scope timing(AuFrameTiming::Mesh);
 	//if(s_DebugGLSL)
 		//qDebug() << "AuGLVAO::CreateForSc tris" << tris.count();
 	if(tris.isEmpty())
@@ -336,6 +429,7 @@ void AuGLVAO::CreateForSc(AuOpenGLFunctions& GLf, const AuScTriRenderList& tris,
 
 	// Generate vertex array object with a buffer for each array.
 	CreateGL(GLf, vertices, 6);
+	SetPaletteRanges(texCoordIndex+2, vertices, 4);
 
 	SelectGL();
 
@@ -384,6 +478,7 @@ void AuGLVAO::CreateForSc(AuOpenGLFunctions& GLf, const AuScTriRenderList& tris,
 
 void AuGLVAO::CreateForBody(AuOpenGLFunctions& GLf, const QList<AuTriBody>& tris, GLenum usage)
 {
+	AuFrameTiming::Scope timing(AuFrameTiming::Mesh);
 	//qDebug() << "AuGLVAO::CreateForBody tris" << tris.count();
 	if(tris.isEmpty())
 		return;
@@ -527,8 +622,9 @@ void AuGLVAO::CreateForBody(AuOpenGLFunctions& GLf, const QList<AuTriBody>& tris
 	delete [] boneWeight;
 }
 
-void AuGLVAO::CreateForModelTexFog(AuOpenGLFunctions& GLf, const QList<AuTriTexNS>& tris, GLenum usage)
+void AuGLVAO::CreateForModelTexFog(AuOpenGLFunctions& GLf, const QList<AuTriTexNS>& tris, GLenum usage, bool indexed)
 {
+	AuFrameTiming::Scope timing(AuFrameTiming::Mesh);
 	if(tris.isEmpty())
 		return;
 
@@ -595,6 +691,13 @@ void AuGLVAO::CreateForModelTexFog(AuOpenGLFunctions& GLf, const QList<AuTriTexN
 		//texCoordShine[tidx++] = (float)(*ti).m_Texture;
 	}
 
+	QVector<GLuint> indices;
+	if(indexed)
+	{
+		vertices = AuIndexVertexStreams<9>(vertices, {{normal,3}, {position,3}, {texCoordShine,3}}, indices);
+		nidx = pidx = tidx = vertices*3;
+	}
+
 	// Generate vertex array object with a buffer for each array.
 	CreateGL(GLf, vertices, 3);
 
@@ -618,6 +721,8 @@ void AuGLVAO::CreateForModelTexFog(AuOpenGLFunctions& GLf, const QList<AuTriTexN
 	GLf.glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	DeselectGL();
+	SetIndices(indices);
+	if(indexed) SetViewRanges(position, indices);
 
 	// OpenGL has the data now. I can discard my local buffers.
 	delete [] normal;
@@ -627,6 +732,7 @@ void AuGLVAO::CreateForModelTexFog(AuOpenGLFunctions& GLf, const QList<AuTriTexN
 
 void AuGLVAO::CreateForModel(AuOpenGLFunctions& GLf, const QList<AuTriTexNS>& tris, GLenum usage)
 {
+	AuFrameTiming::Scope timing(AuFrameTiming::Mesh);
 	if(tris.isEmpty())
 		return;
 
@@ -705,6 +811,7 @@ void AuGLVAO::CreateForModel(AuOpenGLFunctions& GLf, const QList<AuTriTexNS>& tr
 
 void AuGLVAO::CreateForTexture(AuOpenGLFunctions& GLf, const QList<AuTriTex>& tris, GLenum usage)
 {
+	AuFrameTiming::Scope timing(AuFrameTiming::Mesh);
 	if(tris.isEmpty())
 		return;
 
@@ -1273,7 +1380,7 @@ void AuGLSL::SunShadowMapLayer(int layer)
 
 void AuGLSL::EndSunShadowMap(const AuSunShadowCascades& cascades, const AuSunShadowCascades& cascades2)
 {
-	AuSunShadowMapEnd(m_GLf, m_SunShadowSaved, m_SunShadowTexture);
+	AuSunShadowMapEnd(m_GLf, m_SunShadowSaved, m_SunShadowTexture, AuShadowTextureLayout::SunUnit());
 	m_SunShadowCascades = cascades;
 	m_SunShadowCascades2 = cascades2;
 	if(m_SunShadowLayers < SUN_SHADOW_CASCADES*SUN_SHADOW_SUNS)
@@ -1319,7 +1426,7 @@ void AuGLSL::LightShadowMapLayer(int layer)
 
 void AuGLSL::EndLightShadowMaps(const AuLightShadowMaps& maps)
 {
-	AuSunShadowMapEnd(m_GLf, m_LightShadowSaved, m_LightShadowTexture, LIGHT_SHADOW_MAP_UNIT);
+	AuSunShadowMapEnd(m_GLf, m_LightShadowSaved, m_LightShadowTexture, AuShadowTextureLayout::LightUnit());
 	m_LightShadowMaps = maps;
 	m_LightShadowSerial++;
 }
@@ -1365,9 +1472,12 @@ void AuGLSL::Initialize(AuOpenGLFunctions& GLf, unsigned int maxLights)
 
 	GLint textureUnits = 0;
 	GLf.glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &textureUnits);
-	AuGLSLShader::SetShadowMapsSupported(textureUnits > SUN_SHADOW_MAP_UNIT);
-	if(s_DebugGLSL || textureUnits <= SUN_SHADOW_MAP_UNIT)
-		qDebug() << "GLSL fragment texture units" << textureUnits << "sun shadow map needs" << SUN_SHADOW_MAP_UNIT + 1;
+	AuShadowTextureLayout::FragmentUnits = textureUnits;
+	AuGLSLShader::SetShadowMapsSupported(textureUnits >= 16);
+	if(s_DebugGLSL || textureUnits < 18)
+		qDebug() << "GLSL fragment texture units" << textureUnits << "shadow units"
+				<< AuShadowTextureLayout::SunUnit() << AuShadowTextureLayout::LightUnit()
+				<< "compact material palettes" << AuShadowTextureLayout::Compact();
 
 	AuGLSLProgramOpt opt(maxLights, this);
 	m_Animal->Build(GLf, opt);
@@ -2097,6 +2207,9 @@ AuGLSLShader::AuGLSLShader(AuOpenGLFunctions& GLf, GLenum shaderType, const QStr
 	QString maxab = QString("%1").arg(MAX_ANIMAL_BONES);
 	src.replace(QByteArray("MAX_ANIMAL_BONES"), maxab.toUtf8());
 
+	if(shaderType == GL_FRAGMENT_SHADER && ShadowMaps() && AuShadowTextureLayout::Compact())
+		AuCompactPaletteSource(src);
+
 	// Load the source code into the shader object.
 	const char* srcData = src.constData();
 	GLf.glShaderSource(m_Shader, 1, &srcData, NULL);
@@ -2212,6 +2325,29 @@ AuGLSLProgram::~AuGLSLProgram()
 {
 }
 
+
+void AuGLSLProgram::SetPointLightEnabled(int light, bool enabled) const
+{
+	// Resolve once per linked program; unaffected shaders have no such uniform.
+	if(m_pointLightEnd == -2)
+		m_pointLightEnd = m_GLf->glGetUniformLocation(m_Program, "pointLightEnd");
+	if(m_pointLightEnd < 0 || light < 0 || light >= MAX_POINT_LIGHTS)
+		return;
+	if(m_PointLightEnabled[light] == enabled)
+		return;
+	m_PointLightEnabled[light] = enabled;
+	int end = m_PointLightEnd;
+	if(enabled)
+		end = qMax(end, light+1);
+	else
+		while(end > 0 && !m_PointLightEnabled[end-1]) --end;
+	if(end != m_PointLightEnd)
+	{
+		m_PointLightEnd = end;
+		m_GLf->glUniform1i(m_pointLightEnd, end);
+	}
+}
+
 void AuGLSLProgram::Select()
 {
 	m_GLf->glUseProgram(m_Program);	// Select this shader program.
@@ -2236,7 +2372,7 @@ void AuGLSLProgram::SendSunShadowMap()
 		m_sunShadowMapDirLocal = m_GLf->glGetUniformLocation(m_Program, "sunShadowMapDirLocal");
 		m_sunShadowMapInfoLocal = m_GLf->glGetUniformLocation(m_Program, "sunShadowMapInfoLocal");
 		if(m_sunShadowMap >= 0)
-			m_GLf->glUniform1i(m_sunShadowMap, SUN_SHADOW_MAP_UNIT);
+			m_GLf->glUniform1i(m_sunShadowMap, AuShadowTextureLayout::SunUnit());
 		m_SunShadowMapLooked = true;
 	}
 	if(!m_Owner || m_sunShadowMapInfo < 0 || m_SunShadowMapSerial == m_Owner->SunShadowMapSerial())
@@ -2343,7 +2479,7 @@ void AuGLSLProgram::SendLightShadowMaps()
 		m_lightShadowInfo = m_GLf->glGetUniformLocation(m_Program, "lightShadowInfo");
 		m_lightShadowParams = m_GLf->glGetUniformLocation(m_Program, "lightShadowParams");
 		if(m_lightShadowMap >= 0)
-			m_GLf->glUniform1i(m_lightShadowMap, LIGHT_SHADOW_MAP_UNIT);
+			m_GLf->glUniform1i(m_lightShadowMap, AuShadowTextureLayout::LightUnit());
 		m_LightShadowLooked = true;
 	}
 	if(!m_Owner || m_lightShadowParams < 0 || m_LightShadowSerial == m_Owner->LightShadowSerial())
@@ -6362,6 +6498,8 @@ void AuGLSLFlora::Build(AuOpenGLFunctions& GLf, const AuGLSLProgramOpt& opt)
 
 	// Bind user defined 'in' variables to vertex attribute indices.
 	m_GLf->glBindAttribLocation(m_Program, 0, "position");
+	// Attribute 15 is reserved for the per-draw instance-buffer offset.
+	m_GLf->glBindAttribLocation(m_Program, 15, "instanceOffset");
 	m_GLf->glBindAttribLocation(m_Program, 1, "normal");
 	m_GLf->glBindAttribLocation(m_Program, 2, "texCoordMovement");
 
@@ -6883,6 +7021,8 @@ void AuGLSLRock::Build(AuOpenGLFunctions& GLf, const AuGLSLProgramOpt& opt)
 
 	// Bind user defined 'in' variables to vertex attribute indices.
 	m_GLf->glBindAttribLocation(m_Program, 0, "position");
+	// Attribute 15 is reserved for the per-draw instance-buffer offset.
+	m_GLf->glBindAttribLocation(m_Program, 15, "instanceOffset");
 	m_GLf->glBindAttribLocation(m_Program, 1, "normal");
 	m_GLf->glBindAttribLocation(m_Program, 2, "texCoord");
 
@@ -6925,6 +7065,10 @@ void AuGLSLRock::Build(AuOpenGLFunctions& GLf, const AuGLSLProgramOpt& opt)
 	m_mv = GetUniformLoc("mv");
 	m_p = GetUniformLoc("p");
 	m_rockM = GetUniformLoc("rockM");
+	m_instanced = GetUniformLoc("instanced");
+	m_instanceBase = GetUniformLoc("instanceBase");
+	m_GLf->glUniform1i(GetUniformLoc("instances"), AuGLSLFlora::InstanceUnit);
+	SetInstanced(false);
 	m_tex = GetUniformLoc("tex");
 
 	m_ambient = GetUniformLoc("light.ambient");
@@ -8183,7 +8327,8 @@ void AuGLSLSnow::Build(AuOpenGLFunctions& GLf, const AuGLSLProgramOpt& opt)
 	m_fogColor = GetUniformLoc("fogColor");
 	m_fogDensity = GetUniformLoc("fogDensity");
 	m_mv = GetUniformLoc("mv");
-	m_offset = GetUniformLoc("offset");
+	m_offset = GetUniformLoc("offsets");
+	m_GLf->glUniform1i(m_offset, 1);
 	m_p = GetUniformLoc("p");
 	m_size = GetUniformLoc("size");
 	m_tex = GetUniformLoc("tex");
@@ -8282,7 +8427,8 @@ void AuGLSLSnowRingworld::Build(AuOpenGLFunctions& GLf, const AuGLSLProgramOpt& 
 	m_fogColor = GetUniformLoc("fogColor");
 	m_fogDensity = GetUniformLoc("fogDensity");
 	m_mv = GetUniformLoc("mv");
-	m_offset = GetUniformLoc("offset");
+	m_offset = GetUniformLoc("offsets");
+	m_GLf->glUniform1i(m_offset, 1);
 	m_p = GetUniformLoc("p");
 	m_size = GetUniformLoc("size");
 	m_tex = GetUniformLoc("tex");
@@ -13563,6 +13709,8 @@ void AuGLSLFloraDepth::Build(AuOpenGLFunctions& GLf, const AuGLSLProgramOpt& opt
 	m_GLf->glAttachShader(m_Program, fs.Id());
 
 	m_GLf->glBindAttribLocation(m_Program, 0, "position");
+	// Attribute 15 is reserved for the per-draw instance-buffer offset.
+	m_GLf->glBindAttribLocation(m_Program, 15, "instanceOffset");
 	m_GLf->glBindAttribLocation(m_Program, 2, "texCoordMovement");
 
 	m_GLf->glLinkProgram(m_Program);

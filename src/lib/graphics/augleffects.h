@@ -640,6 +640,14 @@ private:
 	QVector<AuGLTexture*>				m_Textures;
 	QMutex								m_muTextures;
 
+	// Context-owned transient streams, shared by sequential particle draws.
+	AuGLVAO m_TextQuad;
+	void RenderTextQuad(const AuPoint& ll, const AuPoint& ul, const AuPoint& ur, const AuPoint& lr);
+	AuGLVAO m_ParticleStream;
+	AuGLVAO m_SnowQuad;
+	GLuint m_SnowPositionBuffer;
+	GLuint m_SnowPositionTexture;
+
 	// GLSL
 	AuGLVAO								m_BarVAO;				// For rendering horizontal status bars: health, damage, etc.
 	AuGLVAO								m_CrosshairBar;			// For rendering crosshair.
@@ -689,6 +697,9 @@ public:
 	AuGLEffects();
 
 	~AuGLEffects();
+
+	void RenderParticleStream(const QVector<GLfloat>& verts, GLenum mode);
+	void RenderSnow(const QVector<GLfloat>& positions);
 
 	// Returns 'col1' blended with 'col2' by 'blend' ammount. 'blend' is in the range of 0 to 1.
 	// 'blend' <= 0 returns col1

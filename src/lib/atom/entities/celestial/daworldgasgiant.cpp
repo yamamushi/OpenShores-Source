@@ -4,6 +4,7 @@
 // All rights reserved.
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
+#include "augpuprofile.h"
 #include "daworldgasgiant.h"
 //
 #include "auatomrenderinfo.h"
@@ -1089,6 +1090,7 @@ void DaWorldGasGiant::RenderLast(const AuMatrix4x4& projection, AuAtomRenderInfo
 		const DaPerson* sceneAtom, DaAtomList& shadSc, DaAtomList& shadScFog, DaAtomList& shadScGlobe, DaAtomList& shadScGlobeFog,
 		DaAtomList& shadScRingworld, DaAtomList& shadScRingworldFog)
 {
+	AuGpuProfile gpuProfile("world.effects");
 	const AuMatrix4x4& model = rmod.Matrix(Id());
 	// Render this planet's atmosphere.
 	DaSolarSystem* pss = FindParentSolarSystem();
@@ -1249,6 +1251,8 @@ void DaWorldGasGiant::RenderGlobe(const AuMatrix4x4& projection, const AuMatrix4
 void DaWorldGasGiant::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatrix4x4& model, AuGLEffects& re,
 		int viewerContext, double viewerAlt, float atmIllumination)
 {
+	AuGpuProfile gpuProfile("atmosphere");
+	const AuViewClip atmosphereClip(projection*model, AuMatrix4x4());
 	if(!s_TexGasGiant)
 		s_TexGasGiant = re.CreateTextureFromBitmap(STATIC_TEXTURE_ID, "GasGiant", ":data/txGasGiants.png");
 
@@ -1299,6 +1303,7 @@ void DaWorldGasGiant::RenderAtmosphere(const AuMatrix4x4& projection, const AuMa
 	GLfloat b = colAtm.blueF();
 	re.GLSL().GasGiantLayerShader().SetAtmosphereColor(r,g,b);
 
+	float drawRadius=1;
 	switch(viewerContext)
 	{
 	case 0:		// The viewer is inside the atmosphere.
@@ -1333,7 +1338,8 @@ void DaWorldGasGiant::RenderAtmosphere(const AuMatrix4x4& projection, const AuMa
 			{
 				double rad = baseRad + spanRad * shell / shells;
 				re.GLSL().GasGiantLayerShader().SetAtmosphereRadius(rad);
-				m_AtmosphereLayer[2].DrawGL();
+				drawRadius = float(rad);
+				m_AtmosphereLayer[2].DrawVisibleGL(atmosphereClip, drawRadius, drawRadius);
 			}
 			m_AtmosphereLayer[2].DeselectGL();
 			re.glFrontFace(GL_CW);
@@ -1372,12 +1378,13 @@ void DaWorldGasGiant::RenderAtmosphere(const AuMatrix4x4& projection, const AuMa
 				{
 					double rad = baseRad + spanRad * shell / shells;
 					re.GLSL().GasGiantLayerShader().SetAtmosphereRadius(rad);
+					drawRadius = float(rad);
 
 					re.glFrontFace(GL_CCW);
-					m_AtmosphereLayer[lyr].DrawGL();
+					m_AtmosphereLayer[lyr].DrawVisibleGL(atmosphereClip, drawRadius, drawRadius);
 
 					re.glFrontFace(GL_CW);
-					m_AtmosphereLayer[lyr].DrawGL();
+					m_AtmosphereLayer[lyr].DrawVisibleGL(atmosphereClip, drawRadius, drawRadius);
 				}
 
 				m_AtmosphereLayer[lyr].DeselectGL();
@@ -1412,7 +1419,8 @@ void DaWorldGasGiant::RenderAtmosphere(const AuMatrix4x4& projection, const AuMa
 				{
 					double rad = baseRad + spanRad * shell / shells;
 					re.GLSL().GasGiantLayerShader().SetAtmosphereRadius(rad);
-					m_AtmosphereLayer[lyr].DrawGL();
+					drawRadius = float(rad);
+					m_AtmosphereLayer[lyr].DrawVisibleGL(atmosphereClip, drawRadius, drawRadius);
 				}
 
 				m_AtmosphereLayer[lyr].DeselectGL();
@@ -1468,16 +1476,17 @@ void DaWorldGasGiant::RenderAtmosphere(const AuMatrix4x4& projection, const AuMa
 				{
 					double rad = baseRad + spanRad * shell / shells;
 					re.GLSL().GasGiantLayerShader().SetAtmosphereRadius(rad);
+					drawRadius = float(rad);
 
 					// Set ambient light level darker at each lower level.
 					float layerIllum = atmIllumination * (.1f + .9f * (rad - seaRad) / maxRad);
 					re.GLSL().GasGiantLayerShader().SetAmbientLight(layerIllum);
 
 					re.glFrontFace(GL_CCW);
-					m_AtmosphereLayer[lyr].DrawGL();
+					m_AtmosphereLayer[lyr].DrawVisibleGL(atmosphereClip, drawRadius, drawRadius);
 
 					re.glFrontFace(GL_CW);
-					m_AtmosphereLayer[lyr].DrawGL();
+					m_AtmosphereLayer[lyr].DrawVisibleGL(atmosphereClip, drawRadius, drawRadius);
 				}
 
 				m_AtmosphereLayer[lyr].DeselectGL();
@@ -1495,7 +1504,8 @@ void DaWorldGasGiant::RenderAtmosphere(const AuMatrix4x4& projection, const AuMa
 			{
 				double rad = baseRad + spanRad * shell / shells;
 				re.GLSL().GasGiantLayerShader().SetAtmosphereRadius(rad);
-				m_AtmosphereLayer[2].DrawGL();
+				drawRadius = float(rad);
+				m_AtmosphereLayer[2].DrawVisibleGL(atmosphereClip, drawRadius, drawRadius);
 			}
 			m_AtmosphereLayer[2].DeselectGL();
 
@@ -1506,10 +1516,11 @@ void DaWorldGasGiant::RenderAtmosphere(const AuMatrix4x4& projection, const AuMa
 		{
 			re.GLSL().GasGiantLayerShader().SetAmbientLight(atmIllumination);
 			re.GLSL().GasGiantLayerShader().SetAtmosphereRadius(AtmosphereRadius());
+			drawRadius = float(AtmosphereRadius());
 			re.GLSL().GasGiantLayerShader().SetWeatherOffset(m_WxSPOffset);	// fast upper layer
 
 			m_AtmosphereLayer[2].SelectGL();
-			m_AtmosphereLayer[2].DrawGL();
+			m_AtmosphereLayer[2].DrawVisibleGL(atmosphereClip, drawRadius, drawRadius);
 			m_AtmosphereLayer[2].DeselectGL();
 		}
 		break;
@@ -1865,7 +1876,7 @@ AuGLVAO DaWorldGasGiant::CreateGasGiantCloudModel(AuOpenGLFunctions& GLf, AuWeat
 	delete [] preOpac;
 
 	AuGLVAO vao;
-	vao.CreateForModelTexFog(GLf, tris, GL_STATIC_DRAW);
+	vao.CreateForModelTexFog(GLf, tris, GL_STATIC_DRAW, true);
 	return vao;
 }
 
@@ -8185,6 +8196,7 @@ void DaWorldGasGiant::UpdateNearSurfaceTexture(AuAtomRenderInfo& ari)
 void DaWorldGasGiant::RenderAtGlobe(const AuMatrix4x4& projection, const AuMatrix4x4& model, AuAtomRenderInfo& ari,
 		const AuPoint& viewerPos, float ambientLight, float fogDensity, float fogR, float fogG, float fogB)
 {
+	AuGpuProfile gpuProfile("terrain.at");
 	//qDebug() << "DaWorldGasGiant::RenderAtGlobe" << Id() << Name() << "vao" << m_AtGlobe.VAO();
 	if(!m_AtGlobe.m_Low.VAO())
 	{
@@ -8199,6 +8211,8 @@ void DaWorldGasGiant::RenderAtGlobe(const AuMatrix4x4& projection, const AuMatri
 
 	if(g_Au.m_DebugSwitches & 0x00000040)
 		return;
+
+	const AuViewClip viewClip(projection, model);
 
 //#if !defined(QT_NO_DEBUG)
 	//glDisable(GL_CULL_FACE);
@@ -8306,9 +8320,15 @@ void DaWorldGasGiant::RenderAtGlobe(const AuMatrix4x4& projection, const AuMatri
 				if(vi != m_AtGlobe.m_TriVAOs.end())
 				{
 					// Display the high-tessellation VAO.
-					(*vi).second.SelectGL();
-					(*vi).second.DrawGL();
-					(*vi).second.DeselectGL();
+					if((*vi).second.InView(viewClip))
+					{
+						(*vi).second.SelectGL();
+						(*vi).second.DrawGL();
+						(*vi).second.DeselectGL();
+					}
+					else
+						(*vi).second.m_LastSelected.restart(); // Keep nearby cached patches warm when looking away.
+					// A ready offscreen patch still counts as coverage for the low-detail globe's clip mask.
 					countShown++;
 				}
 			}
@@ -8406,9 +8426,15 @@ void DaWorldGasGiant::RenderAtGlobe(const AuMatrix4x4& projection, const AuMatri
 				if(vi != m_AtGlobe.m_TriVAOs.end())
 				{
 					// Display the high-tessellation VAO.
-					(*vi).second.SelectGL();
-					(*vi).second.DrawGL();
-					(*vi).second.DeselectGL();
+					if((*vi).second.InView(viewClip))
+					{
+						(*vi).second.SelectGL();
+						(*vi).second.DrawGL();
+						(*vi).second.DeselectGL();
+					}
+					else
+						(*vi).second.m_LastSelected.restart(); // Keep nearby cached patches warm when looking away.
+					// A ready offscreen patch still counts as coverage for the low-detail globe's clip mask.
 					countShown++;
 				}
 			}
@@ -8911,6 +8937,7 @@ void DaWorldGasGiant::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatr
 		bool bothLayers, float illumination, float ambientLight, bool showUndersideOfSurface, float fogDensity,
 		float fogR, float fogG, float fogB, bool topDownView)
 {
+	AuGpuProfile gpuProfile("sea");
 	Q_UNUSED(projection);
 	if(g_Au.m_DebugSwitches & 0x00000400)
 		return;

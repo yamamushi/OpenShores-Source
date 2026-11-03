@@ -222,62 +222,6 @@ int AuParticleSystem::Update()
 	return result;
 }
 
-void AuParticleSystem::Render(const AuMatrix4x4& projection, const AuMatrix4x4& model, AuGLEffects& re, float scale)
-{
-	Q_UNUSED(projection);
-	Q_UNUSED(model);
-	Q_UNUSED(scale);
-	// Compute billboard vertices's on the GPU using ARB_point_sprites
-	auParticle	*pParticle = m_pActiveList;
-
-	// Render point sprites
-	re.glEnable(GL_PROGRAM_POINT_SIZE); 
-	//re.glPointSize(m_fSize * scale);
-
-	// Everybody who calls this uses the SpriteSizeShader.
-	// Build vertex data for that shader.
-	/*
-	re.glBegin(GL_POINTS);
-	{
-		// Render each particle
-		while(pParticle)
-		{
-			re.glNormal3d(pParticle->m_vNorm.x,
-				pParticle->m_vNorm.y,
-				pParticle->m_vNorm.z);
-			re.glVertex4d(pParticle->m_vCurPos.x,
-						pParticle->m_vCurPos.y,
-						pParticle->m_vCurPos.z, 1);	// w is the vertex alpha
-			pParticle = pParticle->m_pNext;
-		}
-	}
-	re.glEnd();
-	*/
-
-	// Compile a list of vertex locations of the particles.
-	QList<AuPointAlpha> verts;
-	while(pParticle)
-	{
-		verts << AuPointAlpha(pParticle->m_vCurPos);
-		pParticle = pParticle->m_pNext;
-	}
-
-	// Make a VAO of the vertex locations.
-	AuGLVAO vao;
-	vao.CreateForSprites(re, verts, GL_STREAM_DRAW);
-
-	// Display the VAO once and clean it up.
-	if(vao.VAO())
-	{
-		vao.SelectGL();
-		vao.DrawGL(GL_POINTS);
-		vao.DeselectGL();
-		vao.DeleteGL();
-	}
-
-	re.glDisable(GL_PROGRAM_POINT_SIZE); 
-}
-
 static bool ParticleBehindEye(const AuPoint& point, const double eyePlane[4])
 {
 	// Match the float positions and matrix uploaded to the sprite shader.
@@ -291,6 +235,27 @@ static bool ParticleBehindEye(const AuPoint& point, const double eyePlane[4])
 	return w < -tolerance;
 }
 
+void AuParticleSystem::Render(const AuMatrix4x4& projection, const AuMatrix4x4& model, AuGLEffects& re, float scale)
+{
+	Q_UNUSED(scale);
+	const AuMatrix4x4 pmv = projection * model;
+	const double* matrix = pmv.GLMatrix();
+	const double eyePlane[4] = { float(matrix[3]), float(matrix[7]), float(matrix[11]), float(matrix[15]) };
+	QVector<GLfloat> verts;
+	for(auParticle* particle=m_pActiveList; particle; particle=particle->m_pNext)
+	{
+		if(ParticleBehindEye(particle->m_vCurPos, eyePlane))
+			continue;
+		verts << GLfloat(particle->m_vCurPos.x) << GLfloat(particle->m_vCurPos.y)
+			<< GLfloat(particle->m_vCurPos.z) << 1.f;
+	}
+	if(verts.isEmpty())
+		return;
+	re.glEnable(GL_PROGRAM_POINT_SIZE);
+	re.RenderParticleStream(verts, GL_POINTS);
+	re.glDisable(GL_PROGRAM_POINT_SIZE);
+}
+
 void AuParticleSystem::RenderCloud(const AuMatrix4x4& projection, const AuMatrix4x4& model, AuGLEffects& re, float scale)
 {
 	Q_UNUSED(scale);
@@ -300,31 +265,8 @@ void AuParticleSystem::RenderCloud(const AuMatrix4x4& projection, const AuMatrix
 	const double* matrix = pmv.GLMatrix();
 	const double eyePlane[4] = { float(matrix[3]), float(matrix[7]), float(matrix[11]), float(matrix[15]) };
 
-	// Render point sprites
-	//re.glPointSize(GetSize() * scale);
-	/*
-	re.glBegin(GL_POINTS);
-	{
-		// Render each particle
-		while(pParticle)
-		{
-			float partAlpha = (1.f - (GetCurTime() - pParticle->m_fInitTime) / GetLifeCycle()) / 2.f;
-
-			re.glNormal3d(pParticle->m_vNorm.x,
-				pParticle->m_vNorm.y,
-				pParticle->m_vNorm.z);
-			re.glVertex4d(pParticle->m_vCurPos.x,
-						pParticle->m_vCurPos.y,
-						pParticle->m_vCurPos.z,
-						partAlpha);
-			pParticle = pParticle->m_pNext;
-		}
-	}
-	re.glEnd();
-	*/
-
 	// Compile a list of vertex locations of the particles.
-	QList<AuPointAlpha> verts;
+	QVector<GLfloat> verts;
 	while(pParticle)
 	{
 		// A point behind the eye cannot reach the framebuffer, regardless of size.
@@ -335,27 +277,17 @@ void AuParticleSystem::RenderCloud(const AuMatrix4x4& projection, const AuMatrix
 			continue;
 		}
 		float partAlpha = (1.f - (GetCurTime() - pParticle->m_fInitTime) / GetLifeCycle()) / 2.f;
-		verts << AuPointAlpha(pParticle->m_vCurPos, partAlpha);
+		verts << GLfloat(pParticle->m_vCurPos.x) << GLfloat(pParticle->m_vCurPos.y)
+			<< GLfloat(pParticle->m_vCurPos.z) << partAlpha;
 		pParticle = pParticle->m_pNext;
 	}
 
-	// Avoid creating/uploading/deleting GPU buffers for a fully hidden cloud.
+	// Avoid GPU work for a fully hidden cloud.
 	if(verts.isEmpty())
 		return;
 	re.glEnable(GL_PROGRAM_POINT_SIZE);
 
-	// Make a VAO of the vertex locations.
-	AuGLVAO vao;
-	vao.CreateForSprites(re, verts, GL_STREAM_DRAW);
-
-	// Display the VAO once and clean it up.
-	if(vao.VAO())
-	{
-		vao.SelectGL();
-		vao.DrawGL(GL_POINTS);
-		vao.DeselectGL();
-		vao.DeleteGL();
-	}
+	re.RenderParticleStream(verts, GL_POINTS);
 
 	re.glDisable(GL_PROGRAM_POINT_SIZE); 
 }

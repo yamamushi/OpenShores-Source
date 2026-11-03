@@ -41,6 +41,9 @@ struct LightSources
 	SunLight							sun2;
 };
 
+// Keep the light array in uniform storage while evaluating lighting.
+uniform LightSources light;
+
 #ifdef SHADOWS
 #define MAX_SHADOW_BODIES 8
 uniform int								shadowBodyCount;
@@ -282,10 +285,9 @@ void computePointLight(PointLight light,
 	oSpecular = light.color * specular * attenuation;
 }
 
-vec3 computeLighting(LightSources light,
-			float shininess,
+vec3 computeLighting(float shininess,
 			vec3 P,
-			vec3 N)
+			vec3 N, vec3 ambientColor)
 {
 	vec3 diffuseLight = vec3(0,0,0);
 	vec3 diffuseSum = vec3(0,0,0);
@@ -340,14 +342,13 @@ vec3 computeLighting(LightSources light,
 		}
 	}
 
-	vec3 ambient = mix(light.ambient * .15, light.ambient, (dot(N, light.ambientUp) + 1.)/2.);
+	vec3 ambient = mix(ambientColor * .15, ambientColor, (dot(N, light.ambientUp) + 1.)/2.);
 
 	vec3 color = ambient + diffuseSum + specularSum;
 
 	return clamp(color, vec3(0,0,0), vec3(1,1,1));
 }
 
-uniform LightSources					light;
 uniform vec4							glowAlpha;
 #endif
 
@@ -355,6 +356,8 @@ uniform vec3							fogColor;				// Fog color
 uniform sampler2D						tex;					// Texture.
 
 #ifdef PER_PIXEL_LIGHTING
+in vec3 vertGlow;
+flat in vec4 vertAmbient;
 in vec4									vertLitScale;
 in float								vertLitShininess;
 in vec3									vertLitP;
@@ -373,8 +376,8 @@ void main()
 	if(fragColor.a * vertLitScale.a < .15)
 		discard;
 
-	vec4 vertColor = vec4(computeLighting(light, vertLitShininess, vertLitP, normalize(vertLitN)), 1) * vertLitScale;
-	vertColor.rgb = min(vertColor.rgb+glowAlpha.rgb, vec3(1.5, 1.5, 1.5));
+	vec4 vertColor = vec4(computeLighting(vertLitShininess, vertLitP, normalize(vertLitN), vertAmbient.w != 0. ? vertAmbient.rgb : light.ambient), 1) * vertLitScale;
+	vertColor.rgb = min(vertColor.rgb+vertGlow, vec3(1.5, 1.5, 1.5));
 	fragColor *= vertColor;
 #else
 	fragColor = texture(tex, vertTexCoordFog.xy) * vertColor;

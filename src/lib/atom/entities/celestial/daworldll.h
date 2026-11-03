@@ -7,6 +7,7 @@
 #ifndef DaWorldLL_H
 #define DaWorldLL_H
 
+#include "auviewclip.h"
 #include "aucommodityexchange.h"
 #include "augeologicalfeature.h"
 #include "auglobal.h"
@@ -1099,7 +1100,12 @@ inline QDataStream& operator>>(QDataStream& in, AuGlobeTriAltVegNPave& o)
 
 class AuGLTriVAO : protected AuGLVAO
 {
+private:
+	AuPoint m_BoundsMin, m_BoundsMax;
+	bool m_HasBounds;
+
 public:
+	using AuGLVAO::SetPaletteRanges;
 	AuElapsedTimer						m_LastSelected;		// Last time the VAO was referenced. Discarded when not needed.
 	bool								m_Valid;			// The model is still usable while invalidated.
 
@@ -1108,12 +1114,16 @@ public:
 	{
 		// m_LastSelected remains null until first Selected.
 		m_Valid = true;
+		m_HasBounds = false;
 	}
 
 	inline AuGLTriVAO(const AuGLTriVAO& c) : AuGLVAO(c)
 	{
 		m_LastSelected = c.m_LastSelected;
 		m_Valid = c.m_Valid;
+		m_BoundsMin = c.m_BoundsMin;
+		m_BoundsMax = c.m_BoundsMax;
+		m_HasBounds = c.m_HasBounds;
 	}
 
 	inline const AuGLTriVAO& operator=(const AuGLTriVAO& c)
@@ -1122,6 +1132,9 @@ public:
 
 		m_LastSelected = c.m_LastSelected;
 		m_Valid = c.m_Valid;
+		m_BoundsMin = c.m_BoundsMin;
+		m_BoundsMax = c.m_BoundsMax;
+		m_HasBounds = c.m_HasBounds;
 
 		return *this;
 	}
@@ -1156,6 +1169,31 @@ public:
 	inline void DrawGL() const
 	{
 		AuGLVAO::DrawGL();
+	}
+
+	void SetBounds(const float* positions, int count, int stride)
+	{
+		m_HasBounds = false;
+		if(!positions || count<=0 || stride<3) return;
+		m_BoundsMin = m_BoundsMax = AuPoint(positions[0],positions[1],positions[2]);
+		for(int i=0; i<count; i++)
+		{
+			const float* p = positions+i*stride;
+			if(!std::isfinite(p[0]) || !std::isfinite(p[1]) || !std::isfinite(p[2])) return;
+			m_BoundsMin.x = qMin(m_BoundsMin.x,double(p[0])); m_BoundsMax.x = qMax(m_BoundsMax.x,double(p[0]));
+			m_BoundsMin.y = qMin(m_BoundsMin.y,double(p[1])); m_BoundsMax.y = qMax(m_BoundsMax.y,double(p[1]));
+			m_BoundsMin.z = qMin(m_BoundsMin.z,double(p[2])); m_BoundsMax.z = qMax(m_BoundsMax.z,double(p[2]));
+		}
+		m_HasBounds = true;
+	}
+	bool InView(const AuViewClip& clip) const
+	{
+		return !m_HasBounds || clip.Intersects(m_BoundsMin,m_BoundsMax);
+	}
+
+	inline void SetIndices(const QVector<GLuint>& indices)
+	{
+		AuGLVAO::SetIndices(indices);
 	}
 
 	inline bool IsOld() const
