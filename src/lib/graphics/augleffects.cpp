@@ -1414,21 +1414,6 @@ int AuGLEffects::RenderText(int x, int y, const QString& str, const QFont& font,
 	else if(flags&Qt::AlignVCenter)
 		ypos -= ysz/2;
 
-#if !defined(Q_OS_MACOS)
-	QList<AuTriTex> tris;
-	tris << AuTriTex(AuPointTex(xpos, ypos, 0, 0,0),
-			AuPointTex(xpos, ypos + ysz, 0, 0,1),
-			AuPointTex(xpos + xsz, ypos + ysz, 0, 1,1));
-	tris << AuTriTex(AuPointTex(xpos + xsz, ypos + ysz, 0, 1,1),
-			AuPointTex(xpos + xsz, ypos, 0, 1,0),
-			AuPointTex(xpos, ypos, 0, 0,0));
-
-	AuGLVAO vao;
-	vao.CreateForTexture(*this, tris, GL_STREAM_DRAW);
-	if(!vao.VAO())
-		return 0;
-#endif
-
 	// Change rendering states but keep old states so we can restore them on exit.
 	GLboolean oldDepthTest;
 	glGetBooleanv(GL_DEPTH_TEST, &oldDepthTest);
@@ -1437,25 +1422,11 @@ int AuGLEffects::RenderText(int x, int y, const QString& str, const QFont& font,
 	glGetBooleanv(GL_DEPTH_WRITEMASK, &oldDepthMask);
 	glDepthMask(GL_FALSE);									// Do not modify Z buffer.
 
-#if defined(Q_OS_MACOS)
 	// Reuse the sprite quad instead of creating/deleting two VBOs and a VAO
 	// for every label in every frame. Coordinates above are already clip-space,
 	// so a square client rect keeps RenderSprite's projection at unit aspect.
 	RenderSprite(QRect(0, 0, 1, 1), xpos + xsz/2, ypos + ysz/2, xsz, ysz, textItem.m_Texture,
 			color.redF(), color.greenF(), color.blueF(), color.alphaF());
-#else
-	GLSL().TextureShader().Select();
-	GLSL().TextureShader().SetProjectionModelView(AuMatrix4x4());
-	GLSL().TextureShader().SetTexture(textItem.m_Texture);
-	GLSL().TextureShader().SetColor(color.redF(), color.greenF(), color.blueF(), color.alphaF());
-
-	vao.SelectGL();
-	vao.DrawGL();
-	vao.DeselectGL();
-	vao.DeleteGL();
-
-	GLSL().TextureShader().Deselect();
-#endif
 
 	// Restore rendering states to the values they held on entry.
 	if(oldDepthMask)
