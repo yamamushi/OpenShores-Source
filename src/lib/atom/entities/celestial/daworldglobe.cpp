@@ -8532,18 +8532,12 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 	AuGLVAO* curvao = 0;
 
 	const bool instancing = g_Au.NewFlora();
-#if defined(Q_OS_MACOS)
 	// Batch opaque legacy meshes too, without enabling the new palette or LODs.
-	const bool batching = true;
-#else
-	const bool batching = instancing;
-#endif
 	AuFloraInstances instances;
 	const AuViewFrustum frustum(projection);
 	float ambR = ambientLight;
 	float ambG = ambientLight;
 	float ambB = ambientLight;
-#if defined(Q_OS_MACOS)
 	// Flush before any unbatched draw so transparency and city lighting retain
 	// their original order. Restore the uniforms tracked by the legacy loops.
 	auto flushLegacyInstances = [&]()
@@ -8569,7 +8563,6 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 		if(curPlantAlpha < 1.f)
 			re.glEnable(GL_BLEND);
 	};
-#endif
 	double gfadeDist = g_Au.GrassViewRangeFt() * .8;				// Distance at which plants start to become transparent
 	double gfadeRange = g_Au.GrassViewRangeFt() - gfadeDist;
 	for(QMap<AuResKey, AuGlobeFlora>::const_iterator gi = m_Grass.cbegin(); gi != m_Grass.cend(); gi++)
@@ -8648,13 +8641,11 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 
 		Q_ASSERT(vao->VAO());
 
-		if(batching && plantAlpha >= 1.f &&
+		if(plantAlpha >= 1.f &&
 				instances.Add(vao, resourceZone, (*gi).Transform(), (*gi).m_GlowR, (*gi).m_GlowG, (*gi).m_GlowB, (*gi).m_WindIndex))
 			continue;
 
-#if defined(Q_OS_MACOS)
 		flushLegacyInstances();
-#endif
 		// Multiply by model matrix to place the plant in the view.
 		re.GLSL().FloraShader().SetPlantMatrix((*gi).Transform());
 
@@ -8668,9 +8659,7 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 		vao->DrawGL();
 	}
 
-#if defined(Q_OS_MACOS)
 	flushLegacyInstances();
-#endif
 
 	if(curvao)
 	{
@@ -8739,7 +8728,7 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 			continue;
 		const float lightShare = instancing ? FloraLodBlend(sqrtf((float)viewPt.Length2()), FloraLodFt(false)) : 0.f;
 
-		if(batching && plantAlpha >= 1.f && (*gi).m_CityR == 0 && (*gi).m_CityG == 0 && (*gi).m_CityB == 0 &&
+		if(plantAlpha >= 1.f && (*gi).m_CityR == 0 && (*gi).m_CityG == 0 && (*gi).m_CityB == 0 &&
 				instances.Room(lightShare > 0.f && lightShare < 1.f ? 2 : 1))
 		{
 			const AuMatrix4x4& t = (*gi).Transform();
@@ -8759,9 +8748,7 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 			continue;
 		}
 
-#if defined(Q_OS_MACOS)
 		flushLegacyInstances();
-#endif
 		// Configure ambient light.
 		float iambR = ambientLight + (*gi).m_CityR;
 		float iambG = ambientLight + (*gi).m_CityG;
@@ -8818,9 +8805,7 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 		vao->DrawGL();
 	}
 
-#if defined(Q_OS_MACOS)
 	flushLegacyInstances();
-#endif
 
 	if(curvao)
 	{
@@ -8888,7 +8873,7 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 			continue;
 		const float lightShare = instancing ? FloraLodBlend(sqrtf((float)viewPt.Length2()), FloraLodFt(true)) : 0.f;
 
-		if(batching && plantAlpha >= 1.f && (*gi).m_CityR == 0 && (*gi).m_CityG == 0 && (*gi).m_CityB == 0 &&
+		if(plantAlpha >= 1.f && (*gi).m_CityR == 0 && (*gi).m_CityG == 0 && (*gi).m_CityB == 0 &&
 				instances.Room(lightShare > 0.f && lightShare < 1.f ? 2 : 1))
 		{
 			const AuMatrix4x4& t = (*gi).Transform();
@@ -8908,9 +8893,7 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 			continue;
 		}
 
-#if defined(Q_OS_MACOS)
 		flushLegacyInstances();
-#endif
 		// Configure ambient light.
 		float iambR = ambientLight + (*gi).m_CityR;
 		float iambG = ambientLight + (*gi).m_CityG;
@@ -8967,9 +8950,7 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 		vao->DrawGL();
 	}
 
-#if defined(Q_OS_MACOS)
 	flushLegacyInstances();
-#endif
 
 	if(curvao)
 	{
