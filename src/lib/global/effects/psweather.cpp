@@ -8,8 +8,6 @@
 //
 #include "augleffects.h"
 
-static AuGLVAO s_SnowFlakeVAO;
-
 PsWeather::PsWeather() : AuParticleSystem()
 {
 	m_vWind	= AuPoint(0.0f,0.0f,0.0f);
@@ -71,61 +69,27 @@ void PsWeather::Render(const AuMatrix4x4& projection, const AuMatrix4x4& model, 
 {
 	Q_UNUSED(projection);
 	Q_UNUSED(scale);
-	if(m_renderMethod == RENDER_METHOD_Snow)
+	if(m_renderMethod == RENDER_METHOD_Snow || m_renderMethod == RENDER_METHOD_Snow_Ringworld)
 	{
-		if(!s_SnowFlakeVAO.VAO())
-			CreateSnowFlakeVAO(re, s_SnowFlakeVAO);
-
-		s_SnowFlakeVAO.SelectGL();
-		for(auParticle* pParticle = GetActiveList(); pParticle; pParticle=pParticle->m_pNext)
+		QVector<GLfloat> positions;
+		for(auParticle* particle = GetActiveList(); particle; particle=particle->m_pNext)
 		{
-			// Skip the particles behind the viewer.
-			AuPoint viewPt = model.Project(pParticle->m_vCurPos);
+			AuPoint viewPt = model.Project(particle->m_vCurPos);
 			if(viewPt.z >= 0)
 				continue;
-			else
-			{
-				viewPt.Unit();
-				if(viewPt.Dot(AuPoint(0,0,-1)) < .7071)
-					continue;
-			}
-
-			re.GLSL().SnowShader().SetFlakePosition(pParticle->m_vCurPos.x, pParticle->m_vCurPos.y, pParticle->m_vCurPos.z);
-			s_SnowFlakeVAO.DrawGL();
-		}
-		s_SnowFlakeVAO.DeselectGL();
-	}
-	else if(m_renderMethod == RENDER_METHOD_Snow_Ringworld)
-	{
-		if(!s_SnowFlakeVAO.VAO())
-			CreateSnowFlakeVAO(re, s_SnowFlakeVAO);
-
-		s_SnowFlakeVAO.SelectGL();
-
-		for(auParticle* pParticle = GetActiveList(); pParticle; pParticle=pParticle->m_pNext)
-		{
-			// Skip the particles behind the viewer.
-			AuPoint viewPt = model.Project(pParticle->m_vCurPos);
-			if(viewPt.z >= 0)
+			viewPt.Unit();
+			if(viewPt.Dot(AuPoint(0,0,-1)) < .7071)
 				continue;
-			else
-			{
-				viewPt.Unit();
-				if(viewPt.Dot(AuPoint(0,0,-1)) < .7071)
-					continue;
-			}
-
-			re.GLSL().SnowRingworldShader().SetFlakePosition(pParticle->m_vCurPos.x,pParticle->m_vCurPos.y,pParticle->m_vCurPos.z);
-			s_SnowFlakeVAO.DrawGL();
+			positions << GLfloat(particle->m_vCurPos.x) << GLfloat(particle->m_vCurPos.y)
+				<< GLfloat(particle->m_vCurPos.z) << 1.f;
 		}
-
-		s_SnowFlakeVAO.DeselectGL();
+		re.RenderSnow(positions);
 	}
 	else if(m_renderMethod == RENDER_METHOD_Rain)
 	{
 		// Render each particle as a line segment.
 		// Compile a list of vertex locations.
-		AuPointArray verts;
+		QVector<GLfloat> verts;
 		for(auParticle* pParticle = GetActiveList(); pParticle; pParticle=pParticle->m_pNext)
 		{
 			// Skip the particles behind the viewer.
@@ -143,99 +107,11 @@ void PsWeather::Render(const AuMatrix4x4& projection, const AuMatrix4x4& model, 
 			vDir.Unit(.01);
 			AuPoint vOldPos(pParticle->m_vOldPos - vDir);
 
-			verts.append(vOldPos);
-			verts.append(pParticle->m_vCurPos);
+			verts << GLfloat(vOldPos.x) << GLfloat(vOldPos.y) << GLfloat(vOldPos.z) << 1.f;
+			verts << GLfloat(pParticle->m_vCurPos.x) << GLfloat(pParticle->m_vCurPos.y)
+				<< GLfloat(pParticle->m_vCurPos.z) << 1.f;
 		}
 
-		// Make a VAO of the vertex locations.
-		AuGLVAO vao;
-		vao.CreateForLines(re, verts, false, GL_STREAM_DRAW);
-
-		// Display the VAO once and clean it up.
-		if(vao.VAO())
-		{
-			vao.SelectGL();
-			vao.DrawGL(GL_LINES);
-			vao.DeselectGL();
-			vao.DeleteGL();
-		}
+		re.RenderParticleStream(verts, GL_LINES);
 	}
-}
-
-void PsWeather::CreateSnowFlakeVAO(AuGLEffects& GLf, AuGLVAO& vao)
-{
-	int vertices = 2*3;										// We will create 2 triangles.
-	GLfloat* vaoPos = new GLfloat[vertices*2];				// vertices(xy) for triangles that make up the model.
-	GLfloat* vaoTex = new GLfloat[vertices*2];				// texture coords(xy)
-	unsigned int vaoPosIdx = 0;
-	unsigned int vaoTexIdx = 0;
-	{
-		// Triangle 1
-		// Vertex 0
-		vaoPos[vaoPosIdx++] = -.5f;
-		vaoPos[vaoPosIdx++] = -.5f;
-
-		vaoTex[vaoTexIdx++] = 0;
-		vaoTex[vaoTexIdx++] = 0;
-
-		// Vertex 1
-		vaoPos[vaoPosIdx++] = -.5f;
-		vaoPos[vaoPosIdx++] = .5f;
-
-		vaoTex[vaoTexIdx++] = 0;
-		vaoTex[vaoTexIdx++] = 1;
-
-		// Vertex 2
-		vaoPos[vaoPosIdx++] = .5f;
-		vaoPos[vaoPosIdx++] = .5f;
-
-		vaoTex[vaoTexIdx++] = 1;
-		vaoTex[vaoTexIdx++] = 1;
-
-		// Triangle 2
-		// Vertex 0
-		vaoPos[vaoPosIdx++] = .5f;
-		vaoPos[vaoPosIdx++] = .5f;
-
-		vaoTex[vaoTexIdx++] = 1;
-		vaoTex[vaoTexIdx++] = 1;
-
-		// Vertex 1
-		vaoPos[vaoPosIdx++] = .5f;
-		vaoPos[vaoPosIdx++] = -.5f;
-
-		vaoTex[vaoTexIdx++] = 1;
-		vaoTex[vaoTexIdx++] = 0;
-
-		// Vertex 2
-		vaoPos[vaoPosIdx++] = -.5f;
-		vaoPos[vaoPosIdx++] = -.5f;
-
-		vaoTex[vaoTexIdx++] = 0;
-		vaoTex[vaoTexIdx++] = 0;
-	}
-
-	// Generate vertex array(s) for this object. We only need one.
-	vao.CreateGL(GLf, vertices, 2);
-
-	// Select vertex array to construct.
-	vao.SelectGL();
-
-	// bind buffer for vertices and copy data into buffer.
-	GLf.glBindBuffer(GL_ARRAY_BUFFER, vao.Buffer(0));
-	GLf.glBufferData(GL_ARRAY_BUFFER, vaoPosIdx*sizeof(GLfloat), vaoPos, GL_STATIC_DRAW);
-	GLf.glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);	// Describe the data in the buffer.
-
-	// bind buffer for normals and copy data into buffer.
-	GLf.glBindBuffer(GL_ARRAY_BUFFER, vao.Buffer(1));
-	GLf.glBufferData(GL_ARRAY_BUFFER, vaoTexIdx*sizeof(GLfloat), vaoTex, GL_STATIC_DRAW);
-	GLf.glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);	// Describe the data in the buffer.
-
-	GLf.glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-	// Disable the vertex array object.
-	vao.DeselectGL();
-
-	delete [] vaoPos;
-	delete [] vaoTex;
 }

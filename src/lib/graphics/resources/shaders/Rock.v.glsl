@@ -6,6 +6,8 @@
 
 #version 150
 
+in float instanceOffset;
+
 #ifndef PER_PIXEL_LIGHTING
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 // Lighting Structures and Functions
@@ -45,6 +47,10 @@ struct LightSources
 	SunLight							sun1;
 	SunLight							sun2;
 };
+
+// Keep the light array in uniform storage while evaluating lighting.
+uniform LightSources light;
+uniform int pointLightEnd;
 
 void computeSunLight(SunLight sun,
 			float shininess,
@@ -119,10 +125,9 @@ void computePointLight(PointLight light,
 	oSpecular = light.color * specular * attenuation;
 }
 
-vec3 computeLighting(LightSources light,
-			float shininess,
+vec3 computeLighting(float shininess,
 			vec3 P,
-			vec3 N)
+			vec3 N, vec3 ambientColor)
 {
 	// Get a diffuse contribution from each sun that is enabled.
 	vec3 diffuseLight = vec3(0,0,0);
@@ -156,7 +161,7 @@ vec3 computeLighting(LightSources light,
 	}
 
 	// Point lights
-	for(int l=0; l<MAX_LIGHTS; l++)
+	for(int l=0; l<MAX_LIGHTS && l<pointLightEnd; l++)
 	{
 		if(light.light[l].enabled)
 		{
@@ -183,7 +188,7 @@ vec3 computeLighting(LightSources light,
 	//vec3 ambient = light.ambient * (dot(N, light.ambientUp) + 1)/2;
 
 	// Calculate spherical ambient lighting that drops off to 20% the ambient light value.
-	vec3 ambient = mix(light.ambient * .15, light.ambient, (dot(N, light.ambientUp) + 1.)/2.);
+	vec3 ambient = mix(ambientColor * .15, ambientColor, (dot(N, light.ambientUp) + 1.)/2.);
 
 	// Calculate final color of lit vertex.
 	vec3 color = ambient + diffuseSum + specularSum;
@@ -197,11 +202,11 @@ vec3 computeLighting(LightSources light,
 
 uniform float							fogDensity;				// Fog density for exponential fog calculation.
 uniform vec4							glowAlpha;				// Glow color due to rock radioactivity (rgb), alpha (a)
-#ifndef PER_PIXEL_LIGHTING
-uniform LightSources					light;					// Light sources.
-#endif
 uniform mat4							mv;						// Model view matrix of globe.
 uniform mat4							p;						// Projection matrix.
+uniform int instanced;
+uniform int instanceBase;
+uniform samplerBuffer instances;
 uniform mat4							rockM;					// Rock placement matrix on globe.
 
 in vec3									normal;					// Incoming vertex normal.
@@ -209,6 +214,8 @@ in vec3									position;				// Incoming vertex location.
 in vec3									texCoordShine;			// Incoming texture coordinate(xy), shininess(z)
 
 #ifdef PER_PIXEL_LIGHTING
+out vec3 vertGlow;
+flat out vec4 vertAmbient;
 out vec4								vertLitScale;
 out float								vertLitShininess;
 out vec3								vertLitP;
@@ -221,19 +228,31 @@ out vec3								vertTexCoordFog;		// Outgoing texture coordinate(xy) and fog den
 void main()
 {
 	// Calculate vertex position in eye space.
-	mat4 mvplant = mv * rockM;
+	mat4 placement = rockM;
+	vec3 glow = glowAlpha.rgb;
+	vec4 instanceAmbient = vec4(0);
+	if(instanced != 0)
+	{
+		int at = (instanceBase + int(instanceOffset) + gl_InstanceID) * 7;
+		placement = mat4(texelFetch(instances,at),texelFetch(instances,at+1),texelFetch(instances,at+2),texelFetch(instances,at+3));
+		glow = texelFetch(instances,at+4).rgb;
+		instanceAmbient = vec4(texelFetch(instances,at+6).rgb,texelFetch(instances,at+5).w);
+	}
+	mat4 mvplant = mv * placement;
 	gl_Position = mvplant * vec4(position, 1);
 
 	// Calculate lighting using eye space position and normal.
 	vec4 eyeN = normalize(mvplant * vec4(normal, 1) - mvplant * vec4(0,0,0,1));	// Surface normal in eye space.
 #ifdef PER_PIXEL_LIGHTING
+	vertGlow = glow;
+	vertAmbient = instanceAmbient;
 	vertLitScale = vec4(1, 1, 1, glowAlpha.a);
 	vertLitShininess = texCoordShine.z;
 	vertLitP = gl_Position.xyz;
 	vertLitN = eyeN.xyz;
 #else
-	vertColor = vec4(computeLighting(light, texCoordShine.z, gl_Position.xyz, eyeN.xyz), glowAlpha.a);
-	vertColor.rgb = min(vertColor.rgb+glowAlpha.rgb, vec3(1.5, 1.5, 1.5));
+	vertColor = vec4(computeLighting(texCoordShine.z, gl_Position.xyz, eyeN.xyz, instanceAmbient.w != 0. ? instanceAmbient.rgb : light.ambient), glowAlpha.a);
+	vertColor.rgb = min(vertColor.rgb+glow, vec3(1.5, 1.5, 1.5));
 #endif
 
 	gl_Position = p * gl_Position;

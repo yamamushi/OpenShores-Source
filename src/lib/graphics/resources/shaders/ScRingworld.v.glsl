@@ -11,7 +11,6 @@
 #endif
 
 #ifndef PER_PIXEL_LIGHTING
-uniform LightSources					light;					// Light sources.
 #endif
 uniform mat4							mv;						// Model view matrix.
 uniform mat4							p;						// Projection matrix.
@@ -54,7 +53,7 @@ void main()
 	vertLitN = eyeN.xyz;
 	vertLitGlowSelfIllum = glowSelfIllum;
 #else
-	vertColor = vec4(computeLighting(light, positionShine.w, normalReflect.w, gl_Position.xyz, eyeN.xyz),
+	vertColor = vec4(computeLighting( positionShine.w, normalReflect.w, gl_Position.xyz, eyeN.xyz),
 			texCoordIndex.w * vertAlpha);
 
 	// Self Illumination

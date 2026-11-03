@@ -40,6 +40,9 @@ struct LightSources
 	SunLight							sun2;
 };
 
+// Keep the light array in uniform storage while evaluating lighting.
+uniform LightSources light;
+
 #ifdef SHADOWS
 #define MAX_SHADOW_BODIES 8
 uniform int								shadowBodyCount;
@@ -269,8 +272,7 @@ void computePointLight(PointLight light,
 	oSpecular = light.color * specular * attenuation;
 }
 
-vec3 computeLighting(LightSources light,
-			float shininess,
+vec3 computeLighting(float shininess,
 			vec3 P,
 			vec3 N)
 {
@@ -334,7 +336,6 @@ vec3 computeLighting(LightSources light,
 	return clamp(color, vec3(0,0,0), vec3(1,1,1));
 }
 
-uniform LightSources					light;
 uniform vec3							glow;
 #endif
 
@@ -394,7 +395,7 @@ void main()
 	fragColor = mix(highColor, lowColor, smoothstep(.9, 1.01, gl_FragCoord.z));
 
 #ifdef PER_PIXEL_LIGHTING
-	vec4 vertColor = vec4(computeLighting(light, vertLitShininess, vertLitP, normalize(vertLitN)), 1) * vertLitScale;
+	vec4 vertColor = vec4(computeLighting(vertLitShininess, vertLitP, normalize(vertLitN)), 1) * vertLitScale;
 	vertColor.rgb = min(vertColor.rgb + glow, vec3(1.5, 1.5, 1.5));
 #endif
 	// Modulate with vertColor for lighting effect.

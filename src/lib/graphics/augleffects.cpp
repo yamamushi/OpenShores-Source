@@ -5,6 +5,7 @@
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
 #include "augleffects.h"
+#include "auframetiming.h"
 //
 #include "autexturelib.h"
 #include "autime.h"
@@ -896,6 +897,62 @@ AuGLEffects::AuGLEffects()
 {
 	m_EyePos = AuPoint(0,0);
 	m_HUDItemsTexture = 0;
+	m_SnowPositionTexture = 0;
+	m_SnowPositionBuffer = 0;
+}
+
+void AuGLEffects::RenderParticleStream(const QVector<GLfloat>& verts, GLenum mode)
+{
+	if(verts.isEmpty())
+		return;
+	m_ParticleStream.UpdateParticleStream(*this, verts);
+	m_ParticleStream.SelectGL();
+	m_ParticleStream.DrawGL(mode);
+	m_ParticleStream.DeselectGL();
+}
+
+void AuGLEffects::RenderSnow(const QVector<GLfloat>& positions)
+{
+	if(positions.isEmpty())
+		return;
+	Q_ASSERT(positions.size() % 4 == 0);
+	if(!m_SnowQuad.VAO())
+	{
+		const GLfloat quad[] = {-.5f,-.5f,0,0, -.5f,.5f,0,1, .5f,.5f,1,1,
+			.5f,.5f,1,1, .5f,-.5f,1,0, -.5f,-.5f,0,0};
+		m_SnowQuad.CreateGL(*this, 6, 1);
+		m_SnowQuad.SelectGL();
+		glBindBuffer(GL_ARRAY_BUFFER, m_SnowQuad.Buffer(0));
+		glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
+		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4*sizeof(GLfloat), 0);
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4*sizeof(GLfloat), (void*)(2*sizeof(GLfloat)));
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		m_SnowQuad.DeselectGL();
+		glGenBuffers(1, &m_SnowPositionBuffer);
+		glGenTextures(1, &m_SnowPositionTexture);
+	}
+	glActiveTexture(GL_TEXTURE1);
+	GLint oldTexture;
+	glGetIntegerv(GL_TEXTURE_BINDING_BUFFER, &oldTexture);
+	glBindTexture(GL_TEXTURE_BUFFER, m_SnowPositionTexture);
+	glBindBuffer(GL_TEXTURE_BUFFER, m_SnowPositionBuffer);
+	// GL 3.2 guarantees at least 65536 texels. Chunk larger systems without reordering.
+	const int maxParticles = 65536;
+	for(int first=0; first<positions.size()/4; first+=maxParticles)
+	{
+		const int count = qMin(maxParticles, positions.size()/4-first);
+		glBufferData(GL_TEXTURE_BUFFER, count*4*sizeof(GLfloat), 0, GL_STREAM_DRAW);
+		glBufferSubData(GL_TEXTURE_BUFFER, 0, count*4*sizeof(GLfloat), positions.constData()+first*4);
+		glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, m_SnowPositionBuffer);
+		m_SnowQuad.SelectGL();
+		glEnableVertexAttribArray(1);
+		m_SnowQuad.DrawGLInstanced(count);
+		glDisableVertexAttribArray(1);
+		m_SnowQuad.DeselectGL();
+	}
+	glBindBuffer(GL_TEXTURE_BUFFER, 0);
+	glBindTexture(GL_TEXTURE_BUFFER, oldTexture);
+	glActiveTexture(GL_TEXTURE0);
 }
 
 AuGLEffects::~AuGLEffects()
@@ -1437,6 +1494,14 @@ int AuGLEffects::RenderText(int x, int y, const QString& str, const QFont& font,
 	return textItem.m_Height;
 }
 
+void AuGLEffects::RenderTextQuad(const AuPoint& ll, const AuPoint& ul, const AuPoint& ur, const AuPoint& lr)
+{
+	m_TextQuad.UpdateTextQuad(*this, ll, ul, ur, lr);
+	m_TextQuad.SelectGL();
+	m_TextQuad.DrawGL();
+	m_TextQuad.DeselectGL();
+}
+
 void AuGLEffects::RenderText(const AuMatrix4x4& projection, const AuMatrix4x4& model, const AuPoint& ll, const AuPoint& ul,
 		const AuPoint& ur, const AuPoint& lr, const QString& str, const QFont& font, const QColor& color)
 {
@@ -1446,28 +1511,12 @@ void AuGLEffects::RenderText(const AuMatrix4x4& projection, const AuMatrix4x4& m
 	if(!textItem.m_Texture)
 		return;
 
-	QList<AuTriTex> tris;
-	tris << AuTriTex(AuPointTex(ll.x, ll.y, ll.z, 0,0),
-			AuPointTex(ul.x, ul.y, ul.z, 0,1),
-			AuPointTex(ur.x, ur.y, ur.z, 1,1));
-	tris << AuTriTex(AuPointTex(ur.x, ur.y, ur.z, 1,1),
-			AuPointTex(lr.x, lr.y, lr.z, 1,0),
-			AuPointTex(ll.x, ll.y, ll.z, 0,0));
-
-	AuGLVAO vao;
-	vao.CreateForTexture(*this, tris, GL_STREAM_DRAW);
-	if(!vao.VAO())
-		return;
-
 	GLSL().TextureShader().Select();
 	GLSL().TextureShader().SetProjectionModelView(projection * model);
 	GLSL().TextureShader().SetTexture(textItem.m_Texture);
 	GLSL().TextureShader().SetColor(color.redF(), color.greenF(), color.blueF(), color.alphaF());
 
-	vao.SelectGL();
-	vao.DrawGL();
-	vao.DeselectGL();
-	vao.DeleteGL();
+	RenderTextQuad(ll, ul, ur, lr);
 
 	GLSL().TextureShader().Deselect();
 }
@@ -1505,28 +1554,13 @@ void AuGLEffects::RenderText(const AuMatrix4x4& projection, const AuMatrix4x4& m
 	else if(flags&Qt::AlignVCenter)
 		tloc.y -= ysz/2;
 
-	QList<AuTriTex> tris;
-	tris << AuTriTex(AuPointTex(tloc.x, tloc.y, tloc.z, 0,0),
-			AuPointTex(tloc.x, tloc.y + ysz, tloc.z, 0,1),
-			AuPointTex(tloc.x + xsz, tloc.y + ysz, tloc.z, 1,1));
-	tris << AuTriTex(AuPointTex(tloc.x + xsz, tloc.y + ysz, tloc.z, 1,1),
-			AuPointTex(tloc.x + xsz, tloc.y, tloc.z, 1,0),
-			AuPointTex(tloc.x, tloc.y, tloc.z, 0,0));
-
-	AuGLVAO vao;
-	vao.CreateForTexture(*this, tris, GL_STREAM_DRAW);
-	if(!vao.VAO())
-		return;
-
 	GLSL().TextureShader().Select();
 	GLSL().TextureShader().SetProjectionModelView(projection);
 	GLSL().TextureShader().SetTexture(textItem.m_Texture);
 	GLSL().TextureShader().SetColor(color.redF(), color.greenF(), color.blueF(), color.alphaF());
 
-	vao.SelectGL();
-	vao.DrawGL();
-	vao.DeselectGL();
-	vao.DeleteGL();
+	RenderTextQuad(tloc, AuPoint(tloc.x, tloc.y+ysz, tloc.z),
+		AuPoint(tloc.x+xsz, tloc.y+ysz, tloc.z), AuPoint(tloc.x+xsz, tloc.y, tloc.z));
 
 	GLSL().TextureShader().Deselect();
 }
@@ -1563,28 +1597,12 @@ void AuGLEffects::RenderText_Shader(const AuMatrix4x4& projection, const AuMatri
 	else if(flags&Qt::AlignVCenter)
 		tloc.y -= ysz/2;
 
-	QList<AuTriTex> tris;
-	tris << AuTriTex(AuPointTex(tloc.x, tloc.y, tloc.z, 0,0),
-			AuPointTex(tloc.x, tloc.y + ysz, tloc.z, 0,1),
-			AuPointTex(tloc.x + xsz, tloc.y + ysz, tloc.z, 1,1));
-	tris << AuTriTex(AuPointTex(tloc.x + xsz, tloc.y + ysz, tloc.z, 1,1),
-			AuPointTex(tloc.x + xsz, tloc.y, tloc.z, 1,0),
-			AuPointTex(tloc.x, tloc.y, tloc.z, 0,0));
-
-	AuGLVAO vao;
-	vao.CreateForTexture(*this, tris, GL_STREAM_DRAW);
-	if(!vao.VAO())
-		return;
-
-	//GLSL().TextureShader().Select();
 	GLSL().TextureShader().SetProjectionModelView(projection * model);
 	GLSL().TextureShader().SetTexture(textItem.m_Texture);
 	GLSL().TextureShader().SetColor(color.redF(), color.greenF(), color.blueF(), color.alphaF());
 
-	vao.SelectGL();
-	vao.DrawGL();
-	vao.DeselectGL();
-	vao.DeleteGL();
+	RenderTextQuad(tloc, AuPoint(tloc.x, tloc.y+ysz, tloc.z),
+		AuPoint(tloc.x+xsz, tloc.y+ysz, tloc.z), AuPoint(tloc.x+xsz, tloc.y, tloc.z));
 
 	//GLSL().TextureShader().Deselect();
 }
@@ -3760,6 +3778,7 @@ QColor AuGLEffects::Blend(const QColor& col1, const QColor& col2, float blend)
 bool AuGLTexture::CreateFromRGB(AuOpenGLFunctions& GLf, const unsigned char *rgbdata, int xsize, int ysize,
 		GLenum format, GLenum dataType, bool mipMap)
 {
+	AuFrameTiming::Scope timing(AuFrameTiming::TextureUpload);
 	// Create and scale the texture.
 	int sxsize = xsize;
 	int sysize = ysize;

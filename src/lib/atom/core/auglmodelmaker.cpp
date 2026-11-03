@@ -4,6 +4,7 @@
 // All rights reserved.
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
+#include "auindexedmesh.h"
 #include "auglmodelmaker.h"
 //
 #include "aubddesign.h"
@@ -3546,8 +3547,15 @@ AuGLTriVAO AuGlobeModelTri::VAO(AuOpenGLFunctions& GLf)
 				paveCity[paveCityIdx++] = (*vi).m_Vert2.m_CityPresence;
 			}
 
-			// Generate vertex array(s) for this object. We only need one.
-			m_VAO.CreateGL(GLf, vertices, 4);
+			QVector<GLuint> indices;
+			const int uniqueVertices = AuIndexVertexStreams<14>(vertices,
+				{{globePos,4}, {globeN,4}, {globeTex,4}, {paveCity,2}}, indices);
+			globePosIdx = globeNIdx = globeTexIdx = uniqueVertices*4;
+			paveCityIdx = uniqueVertices*2;
+
+			// Upload shared vertices once; retain every triangle in its original order.
+			m_VAO.CreateGL(GLf, uniqueVertices, 4);
+			m_VAO.SetBounds(globePos, uniqueVertices, 4);
 
 			// Select vertex array to construct.
 			m_VAO.SelectGLNoTime();
@@ -3576,6 +3584,8 @@ AuGLTriVAO AuGlobeModelTri::VAO(AuOpenGLFunctions& GLf)
 
 			// Disable the vertex array object.
 			m_VAO.DeselectGL();
+			m_VAO.SetIndices(indices);
+			m_VAO.SetPaletteRanges(globeN+3, uniqueVertices, 4, indices, true);
 
 			delete [] globePos;
 			delete [] globeN;
@@ -3652,8 +3662,15 @@ AuGLTriVAO AuGlobeModelTri::VAO(AuOpenGLFunctions& GLf)
 				city[cityIdx++] = (*vi).m_Vert2.m_CityPresence;
 			}
 
-			// Generate vertex array(s) for this object. We only need one.
-			m_VAO.CreateGL(GLf, vertices, 4);
+			QVector<GLuint> indices;
+			const int uniqueVertices = AuIndexVertexStreams<13>(vertices,
+				{{globePos,4}, {globeN,4}, {globeTex,4}, {city,1}}, indices);
+			globePosIdx = globeNIdx = globeTexIdx = uniqueVertices*4;
+			cityIdx = uniqueVertices*1;
+
+			// Upload shared vertices once; retain every triangle in its original order.
+			m_VAO.CreateGL(GLf, uniqueVertices, 4);
+			m_VAO.SetBounds(globePos, uniqueVertices, 4);
 
 			// Select vertex array to construct.
 			m_VAO.SelectGLNoTime();
@@ -3682,6 +3699,8 @@ AuGLTriVAO AuGlobeModelTri::VAO(AuOpenGLFunctions& GLf)
 
 			// Disable the vertex array object.
 			m_VAO.DeselectGL();
+			m_VAO.SetIndices(indices);
+			m_VAO.SetPaletteRanges(globeN+3, uniqueVertices, 4, indices, true);
 
 			delete [] globePos;
 			delete [] globeN;

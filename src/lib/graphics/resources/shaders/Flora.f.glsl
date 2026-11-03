@@ -44,6 +44,10 @@ struct LightSources
 	SunLight							sun2;
 };
 
+// Keep the light array in uniform storage while evaluating lighting.
+uniform LightSources light;
+uniform int pointLightEnd;
+
 #ifdef SHADOWS
 #define MAX_SHADOW_BODIES 8
 uniform int								shadowBodyCount;
@@ -272,9 +276,8 @@ void computePointLight(PointLight light,
 	oDiffuse = light.color * lighting * attenuation;
 }
 
-vec3 computeLighting(LightSources light,
-			vec3 P,
-			vec3 N)
+vec3 computeLighting(vec3 P,
+			vec3 N, vec3 ambientColor)
 {
 	vec3 diffuseLight = vec3(0,0,0);
 	vec3 diffuseSum = vec3(0,0,0);
@@ -297,7 +300,7 @@ vec3 computeLighting(LightSources light,
 		}
 	}
 
-	for(int l=0; l<MAX_LIGHTS; l++)
+	for(int l=0; l<MAX_LIGHTS && l<pointLightEnd; l++)
 	{
 		if(light.light[l].enabled)
 		{
@@ -321,14 +324,13 @@ vec3 computeLighting(LightSources light,
 		}
 	}
 
-	vec3 ambient = mix(light.ambient * .15, light.ambient, (dot(N, light.ambientUp) + 1.)/2.);
+	vec3 ambient = mix(ambientColor * .15, ambientColor, (dot(N, light.ambientUp) + 1.)/2.);
 
 	vec3 color = ambient + diffuseSum;
 
 	return clamp(color, vec3(0,0,0), vec3(1,1,1));
 }
 
-uniform LightSources					light;
 uniform vec4							glowAlpha;
 #endif
 
@@ -336,6 +338,7 @@ uniform vec3							fogColor;				// Fog color
 uniform sampler2D						tex;					// Texture.
 
 #ifdef PER_PIXEL_LIGHTING
+flat in vec4 vertAmbient;
 in vec4									vertLitScale;
 in vec3									vertLitP;
 in vec3									vertLitN;
@@ -374,7 +377,7 @@ void main()
 		return;
 #endif
 
-	vec4 vertColor = vec4(computeLighting(light, vertLitP, normalize(vertLitN)), 1) * vertLitScale;
+	vec4 vertColor = vec4(computeLighting(vertLitP, normalize(vertLitN), vertAmbient.w != 0. ? vertAmbient.rgb : light.ambient), 1) * vertLitScale;
 	vertColor.rgb = min(vertColor.rgb+vertGlow, vec3(1.5, 1.5, 1.5));
 	fragColor *= vertColor;
 #else

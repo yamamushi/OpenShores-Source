@@ -40,6 +40,10 @@ struct LightSources
 	SunLight							sun2;
 };
 
+// Keep the light array in uniform storage while evaluating lighting.
+uniform LightSources light;
+uniform int pointLightEnd;
+
 #ifdef SHADOWS
 #define MAX_SHADOW_BODIES 8
 uniform int								shadowBodyLocalCount;
@@ -271,8 +275,7 @@ void computePointLight(PointLight light,
 	oSpecular = light.color * specular * attenuation;
 }
 
-vec3 computeLighting(LightSources light,
-			float shininess,
+vec3 computeLighting(float shininess,
 			vec3 P,
 			vec3 N)
 {
@@ -302,7 +305,7 @@ vec3 computeLighting(LightSources light,
 		}
 	}
 
-	for(int l=0; l<MAX_LIGHTS; l++)
+	for(int l=0; l<MAX_LIGHTS && l<pointLightEnd; l++)
 	{
 		if(light.light[l].enabled)
 		{
@@ -334,7 +337,6 @@ vec3 computeLighting(LightSources light,
 	return clamp(color, vec3(0,0,0), vec3(1,1,1));
 }
 
-uniform LightSources					light;
 #endif
 
 uniform vec3							fogColor;				// Fog color
@@ -355,7 +357,7 @@ out vec4								fragColor;				// Outgoing fragment color.
 void main()
 {
 #ifdef PER_PIXEL_LIGHTING
-	vec4 vertColor = vec4(computeLighting(light, 150., vertLitP, normalize(vertLitN)), 1) * vertLitScale;
+	vec4 vertColor = vec4(computeLighting(150., vertLitP, normalize(vertLitN)), 1) * vertLitScale;
 #endif
 	// Lava is not transparent.
 	fragColor = vec4((texture(tex, vertTexCoordFog.xy).rgb +

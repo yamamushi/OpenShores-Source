@@ -49,8 +49,6 @@ public:
 	virtual void InitParticle(auParticle* pParticle);
 	virtual void Render(const AuMatrix4x4& projection, const AuMatrix4x4& model, AuGLEffects& re, float scale=1.f);
 
-	void CreateSnowFlakeVAO(AuGLEffects& GLf, AuGLVAO& vao);
-
 private:
 	AuMatrix4x4	m_tFix;		// The projection matrix for updating particle due to viewer movement and rotation.
 	AuMatrix4x4	m_tNew;		// Used to project the position of nu particles. Useful for moving them out ahead when the viewer is moving fast.

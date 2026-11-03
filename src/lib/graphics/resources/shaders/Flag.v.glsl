@@ -46,6 +46,9 @@ struct LightSources
 	SunLight							sun2;
 };
 
+// Keep the light array in uniform storage while evaluating lighting.
+uniform LightSources light;
+
 void computeSunLight(SunLight sun,
 			vec3 P,
 			vec3 N,
@@ -103,8 +106,7 @@ void computePointLight(PointLight light,
 	oDiffuse = light.color * lighting * attenuation;
 }
 
-vec3 computeLighting(LightSources light,
-			vec3 P,
+vec3 computeLighting(vec3 P,
 			vec3 N)
 {
 	// Get a diffuse contribution from each sun that is enabled.
@@ -172,9 +174,6 @@ vec3 computeLighting(LightSources light,
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
 uniform float							fogDensity;				// Fog density for exponential fog calculation.
-#ifndef PER_PIXEL_LIGHTING
-uniform LightSources					light;					// Light sources.
-#endif
 uniform mat4							mv;						// Model view matrix.
 uniform mat4							p;						// Projection matrix.
 uniform vec2							wind;					// Wind force(x) [0..1] and period(y) [0..1]
@@ -219,7 +218,7 @@ void main()
 	vertLitP = gl_Position.xyz;
 	vertLitN = eyeN.xyz;
 #else
-	vertColor = vec4(computeLighting(light, gl_Position.xyz, eyeN.xyz), 1);
+	vertColor = vec4(computeLighting(gl_Position.xyz, eyeN.xyz), 1);
 #endif
 
 	gl_Position = p * gl_Position;

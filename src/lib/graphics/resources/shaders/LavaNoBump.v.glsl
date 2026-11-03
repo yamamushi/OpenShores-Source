@@ -45,6 +45,10 @@ struct LightSources
 	SunLight							sun2;
 };
 
+// Keep the light array in uniform storage while evaluating lighting.
+uniform LightSources light;
+uniform int pointLightEnd;
+
 void computeSunLight(SunLight sun,
 			vec3 eyeP,
 			float shininess,
@@ -109,8 +113,7 @@ void computePointLight(PointLight light,
 	oSpecular = light.color * specular * attenuation;
 }
 
-vec3 computeLighting(LightSources light,
-			float shininess,
+vec3 computeLighting(float shininess,
 			vec3 P,
 			vec3 N)
 {
@@ -146,7 +149,7 @@ vec3 computeLighting(LightSources light,
 	}
 
 	// Point lights
-	for(int l=0; l<MAX_LIGHTS; l++)
+	for(int l=0; l<MAX_LIGHTS && l<pointLightEnd; l++)
 	{
 		if(light.light[l].enabled)
 		{
@@ -180,9 +183,6 @@ vec3 computeLighting(LightSources light,
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
 uniform float							fogDensity;				// Fog density for exponential fog calculation.
-#ifndef PER_PIXEL_LIGHTING
-uniform LightSources					light;					// Light sources.
-#endif
 uniform mat4							p;						// Projection matrix.
 uniform mat4							mv;						// Model view matrix.
 uniform vec2							texOffset;				// Texture offset
@@ -211,7 +211,7 @@ void main()
 	vertLitP = position;
 	vertLitN = N;
 #else
-	vertColor = vec4(computeLighting(light, 150., position, N), 1);
+	vertColor = vec4(computeLighting(150., position, N), 1);
 #endif
 
 	gl_Position = p * mv * vec4(position,1);	// Calculate homogeneous vertex position using projection and model view matrices.

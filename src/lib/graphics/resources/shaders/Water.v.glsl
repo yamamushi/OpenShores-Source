@@ -44,6 +44,10 @@ struct LightSources
 	SunLight							sun2;
 };
 
+// Keep the light array in uniform storage while evaluating lighting.
+uniform LightSources light;
+uniform int pointLightEnd;
+
 void computeSunLight(SunLight sun,
 			vec3 eyeP,
 			float shininess,
@@ -94,8 +98,7 @@ void computePointLight(PointLight light,
 	oDiffuse = light.color * lighting * attenuation;
 }
 
-vec3 computeSunLighting(LightSources light,
-			float shininess,
+vec3 computeSunLighting(float shininess,
 			vec3 P,
 			vec3 N)
 {
@@ -129,8 +132,7 @@ vec3 computeSunLighting(LightSources light,
 	return clamp(diffuseSum, vec3(0,0,0), vec3(1,1,1));
 }
 
-vec3 computeLighting(LightSources light,
-			float shininess,
+vec3 computeLighting(float shininess,
 			vec3 P,
 			vec3 N)
 {
@@ -139,7 +141,7 @@ vec3 computeLighting(LightSources light,
 	vec3 diffuseSum = vec3(0,0,0);
 
 	// Point lights
-	for(int l=0; l<MAX_LIGHTS; l++)
+	for(int l=0; l<MAX_LIGHTS && l<pointLightEnd; l++)
 	{
 		if(light.light[l].enabled)
 		{
@@ -170,7 +172,6 @@ vec3 computeLighting(LightSources light,
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
 uniform float							fogDensity;				// Fog density for exponential fog calculation.
-uniform LightSources					light;					// Light sources.
 uniform mat4							p;						// Projection matrix.
 uniform mat4							mv;						// Model view matrix.
 uniform vec2							texOffset;				// Texture offset
@@ -223,7 +224,7 @@ void main()
 	// parallel to the normals at those vertexes.
 	// Vertex up vector relative to the globe is used to clip away the fragments near the viewer.
 	vertUp = normalize(position);
-	sunColor = computeSunLighting(light, 100., position, vertUp);
+	sunColor = computeSunLighting(100., position, vertUp);
 #ifdef SHADOW_MAPS
 	vertMapP = position;
 	vertMapN = vertUp;
@@ -231,7 +232,7 @@ void main()
 		sunShadowMapsOf(light.sun1.enabled, light.sun1.position, position),
 		sunShadowMapsOf(light.sun2.enabled, light.sun2.position, position));
 #endif
-	lightColor = computeLighting(light, 100., position, vertUp);
+	lightColor = computeLighting(100., position, vertUp);
 
 	gl_Position = p * mv * vec4(position,1);	// Calculate homogeneous vertex position using projection and model view matrices.
 

@@ -4,6 +4,9 @@
 // All rights reserved.
 //-+---+---+---+---+---+---+---+---+---|---+---+---+---+---+---+-==+---+---+---|---+---+---+---+---+---+---+---+---+---+---+---+---|
 
+#include "auindexedmesh.h"
+#include "augpuprofile.h"
+#include <algorithm>
 #include "daworldglobe.h"
 
 #include <map>
@@ -1523,6 +1526,7 @@ void DaWorldGlobe::RenderLast(const AuMatrix4x4& projection, AuAtomRenderInfo& a
 		const DaPerson* sceneAtom, DaAtomList& shadSc, DaAtomList& shadScFog, DaAtomList& shadScGlobe, DaAtomList& shadScGlobeFog,
 		DaAtomList& shadScRingworld, DaAtomList& shadScRingworldFog)
 {
+	AuGpuProfile gpuProfile("world.effects");
 	const AuMatrix4x4& model = rmod.Matrix(Id());
 	// Render this planet's atmosphere.
 	DaSolarSystem* pss = FindParentSolarSystem();
@@ -1629,6 +1633,8 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 		bool bothLayers, float illumination, float ambientLight, bool showUndersideOfSurface, float fogDensity,
 		float fogR, float fogG, float fogB, bool topDownView)
 {
+	AuGpuProfile gpuProfile("sea");
+	const AuViewClip seaClip(projection,model);
 	if(g_Au.m_DebugSwitches & 0x00000400)
 		return;
 
@@ -1756,6 +1762,10 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 			}
 
 			// Generate vertex array(s) for this object. We only need one.
+			QVector<GLuint> indices;
+			vertices = AuIndexVertexStreams<8>(vertices, {{globePos,3}, {globeTex,2}, {globeTan,3}}, indices);
+			globePosIdx = globeTanIdx = vertices*3;
+			globeTexIdx = vertices*2;
 			m_SeaGlobe.CreateGL(re, vertices, 3);
 
 			// Select vertex array to construct.
@@ -1780,6 +1790,8 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 
 			// Disable the vertex array object.
 			m_SeaGlobe.DeselectGL();
+			m_SeaGlobe.SetIndices(indices);
+			m_SeaGlobe.SetViewRanges(globePos, indices);
 
 			delete [] globePos;
 			delete [] globeTex;
@@ -1920,6 +1932,10 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 			}
 
 			// Generate vertex array(s) for this object. We only need one.
+			QVector<GLuint> indices;
+			vertices = AuIndexVertexStreams<8>(vertices, {{globePos,3}, {globeTex,2}, {globeTan,3}}, indices);
+			globePosIdx = globeTanIdx = vertices*3;
+			globeTexIdx = vertices*2;
 			m_UnderseaGlobe.CreateGL(re, vertices, 3);
 
 			// Select vertex array to construct.
@@ -1944,6 +1960,8 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 
 			// Disable the vertex array object.
 			m_UnderseaGlobe.DeselectGL();
+			m_UnderseaGlobe.SetIndices(indices);
+			m_UnderseaGlobe.SetViewRanges(globePos, indices);
 
 			delete [] globePos;
 			delete [] globeTex;
@@ -2005,7 +2023,7 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 
 				// Display the opaque lower layer.
 				m_UnderseaGlobe.SelectGL();
-				m_UnderseaGlobe.DrawGL();
+				m_UnderseaGlobe.DrawVisibleGL(seaClip);
 				m_UnderseaGlobe.DeselectGL();
 
 				re.GLSL().LavaNoBumpShader().Deselect();
@@ -2063,7 +2081,7 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 
 			// Inferno zone. Lava is not transparent.
 			m_SeaGlobe.SelectGL();
-			m_SeaGlobe.DrawGL();
+			m_SeaGlobe.DrawVisibleGL(seaClip);
 			m_SeaGlobe.DeselectGL();
 
 			// Restore face culling if we changed it.
@@ -2142,7 +2160,7 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 				re.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 				m_SeaGlobe.SelectGL();
-				m_SeaGlobe.DrawGL();
+				m_SeaGlobe.DrawVisibleGL(seaClip);
 				m_SeaGlobe.DeselectGL();
 
 				re.glDisable(GL_BLEND);
@@ -2206,7 +2224,7 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 
 					// Display the opaque lower layer.
 					m_UnderseaGlobe.SelectGL();
-					m_UnderseaGlobe.DrawGL();
+					m_UnderseaGlobe.DrawVisibleGL(seaClip);
 					m_UnderseaGlobe.DeselectGL();
 
 					re.GLSL().WaterNoBumpNoHoleShader().Deselect();
@@ -2270,7 +2288,7 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 				re.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 				m_SeaGlobe.SelectGL();
-				m_SeaGlobe.DrawGL();
+				m_SeaGlobe.DrawVisibleGL(seaClip);
 				m_SeaGlobe.DeselectGL();
 
 				re.glDisable(GL_BLEND);
@@ -2336,7 +2354,7 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 			{
 				// Display the opaque lower layer.
 				m_UnderseaGlobe.SelectGL();
-				m_UnderseaGlobe.DrawGL();
+				m_UnderseaGlobe.DrawVisibleGL(seaClip);
 				m_UnderseaGlobe.DeselectGL();
 			}
 
@@ -2348,7 +2366,7 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 
 			// Inferno zone. Lava is not transparent.
 			m_SeaGlobe.SelectGL();
-			m_SeaGlobe.DrawGL();
+			m_SeaGlobe.DrawVisibleGL(seaClip);
 			m_SeaGlobe.DeselectGL();
 
 			// Restore face culling if we changed it.
@@ -2418,7 +2436,7 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 
 					// Display the opaque lower layer.
 					m_UnderseaGlobe.SelectGL();
-					m_UnderseaGlobe.DrawGL();
+					m_UnderseaGlobe.DrawVisibleGL(seaClip);
 					m_UnderseaGlobe.DeselectGL();
 				}
 
@@ -2439,7 +2457,7 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 				re.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 				m_SeaGlobe.SelectGL();
-				m_SeaGlobe.DrawGL();
+				m_SeaGlobe.DrawVisibleGL(seaClip);
 				m_SeaGlobe.DeselectGL();
 
 				re.glDisable(GL_BLEND);
@@ -2501,7 +2519,7 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 
 					// Display the opaque lower layer.
 					m_UnderseaGlobe.SelectGL();
-					m_UnderseaGlobe.DrawGL();
+					m_UnderseaGlobe.DrawVisibleGL(seaClip);
 					m_UnderseaGlobe.DeselectGL();
 				}
 
@@ -2522,7 +2540,7 @@ void DaWorldGlobe::RenderSeaGlobe(const AuMatrix4x4& projection, const AuMatrix4
 				re.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 				m_SeaGlobe.SelectGL();
-				m_SeaGlobe.DrawGL();
+				m_SeaGlobe.DrawVisibleGL(seaClip);
 				m_SeaGlobe.DeselectGL();
 
 				re.glDisable(GL_BLEND);
@@ -2574,6 +2592,8 @@ void DaWorldGlobe::CreateWeatherRenderData(AuGLEffects& re, AuGLModelMaker& mm)
 void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatrix4x4& model, AuGLEffects& re, AuGLModelMaker& mm,
 		int viewerContext, double viewerAlt, bool clouds, float atmIllumination, float atmOpacity)
 {
+	AuGpuProfile gpuProfile("atmosphere");
+	const AuViewClip atmosphereClip(projection*model, AuMatrix4x4());
 	if(viewerContext == 2)
 	{
 		// Far Globe
@@ -2677,6 +2697,11 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 			globeTex[globeTexIdx++] = (*vi).m_Vert2.m_TexCoord.y();
 		}
 
+		QVector<GLuint> indices;
+		vertices = AuIndexVertexStreams<5>(vertices, {{globePos,3}, {globeTex,2}}, indices);
+		globePosIdx = vertices*3;
+		globeTexIdx = vertices*2;
+
 		// Generate vertex array(s) for this object. We only need one.
 		m_Atmosphere.CreateGL(re, vertices, 2);
 
@@ -2697,11 +2722,19 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 
 		// Disable the vertex array object.
 		m_Atmosphere.DeselectGL();
+		m_Atmosphere.SetIndices(indices);
+		m_Atmosphere.SetViewRanges(globePos, indices);
 
 		delete [] globePos;
 		delete [] globeTex;
 	}
 
+	float drawRadius=1, drawLift=0;
+	auto drawShell = [&]()
+	{
+		const float lower=drawRadius+qMin(0.f,drawLift), upper=drawRadius+qMax(0.f,drawLift);
+		m_Atmosphere.DrawVisibleGL(atmosphereClip,lower,upper);
+	};
 	switch(viewerContext)
 	{
 	case 0:		// The viewer is inside the atmosphere.
@@ -2725,6 +2758,8 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 			re.GLSL().AtmosphereShader().SetAtmosphereAlpha(atmOpacity);
 			re.GLSL().AtmosphereShader().SetAtmosphereColor(atmColor);
 			re.GLSL().AtmosphereShader().SetAtmosphereRadius(AtmosphereRadius());
+			drawRadius = float(AtmosphereRadius());
+			drawLift = 0;
 
 			// Suns
 			for(int sunIndex=0; sunIndex<MAX_SUNS; sunIndex++)
@@ -2743,7 +2778,7 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 			re.glFrontFace(GL_CCW);
 
 			m_Atmosphere.SelectGL();
-			m_Atmosphere.DrawGL();
+			drawShell();
 
 			re.GLSL().AtmosphereShader().Deselect();
 
@@ -2795,6 +2830,7 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 				{
 					float layerAlt = SeaLevelAltitude() + m_Wx.LayerAltitude(*this, AuWeather::LowClouds);
 					re.GLSL().CloudShader().SetCloudLayerRadius(layerAlt);
+					drawRadius = float(layerAlt);
 					re.GLSL().CloudShader().SetWxMinimums(m_WxMinSP, m_WxMinVP);
 					re.GLSL().CloudShader().SetWxMaximums(m_WxMaxSP, m_WxMaxVP);
 					re.GLSL().CloudShader().SetWxTexture(m_glTexWx);
@@ -2805,7 +2841,8 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 							// Display a single cloud layer.
 							re.GLSL().CloudShader().SetCloudSunset(.7f);
 							re.GLSL().CloudShader().SetCloudLiftMax(0);
-							m_Atmosphere.DrawGL();
+							drawLift = float(0);
+							drawShell();
 						}
 						break;
 					case 2:
@@ -2819,7 +2856,8 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 								{
 									float lift = liftMax * tops;
 									re.GLSL().CloudShader().SetCloudLiftMax(lift);
-									m_Atmosphere.DrawGL();
+									drawLift = float(lift);
+									drawShell();
 									if(tops == 0)
 										re.GLSL().CloudShader().SetCloudSunset(0);	// Off for remaining layers above.
 								}
@@ -2832,9 +2870,10 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 								{
 									float lift = liftMax * tops;
 									re.GLSL().CloudShader().SetCloudLiftMax(lift);
+									drawLift = float(lift);
 									if(tops == 0)
 										re.GLSL().CloudShader().SetCloudSunset(1);	// On for bottom layer.
-									m_Atmosphere.DrawGL();
+									drawShell();
 								}
 							}
 						}
@@ -2850,7 +2889,8 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 								{
 									float lift = liftMax * tops / 4;
 									re.GLSL().CloudShader().SetCloudLiftMax(lift);
-									m_Atmosphere.DrawGL();
+									drawLift = float(lift);
+									drawShell();
 									if(tops == -1)
 										re.GLSL().CloudShader().SetCloudSunset(.7f);	// Dim for next layer above.
 									else if(tops == 0)
@@ -2865,11 +2905,12 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 								{
 									float lift = liftMax * tops / 4;
 									re.GLSL().CloudShader().SetCloudLiftMax(lift);
+									drawLift = float(lift);
 									if(tops == 0)
 										re.GLSL().CloudShader().SetCloudSunset(.7f);	// Dim for layer above the bottom layer.
 									else if(tops == -1)
 										re.GLSL().CloudShader().SetCloudSunset(1);	// On for bottom layer.
-									m_Atmosphere.DrawGL();
+									drawShell();
 								}
 							}
 						}
@@ -2946,6 +2987,7 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 				{
 					float layerAlt = SeaLevelAltitude() + m_Wx.LayerAltitude(*this, AuWeather::LowClouds);
 					re.GLSL().CloudShader().SetCloudLayerRadius(layerAlt);
+					drawRadius = float(layerAlt);
 					re.GLSL().CloudShader().SetWxMinimums(m_WxMinSP, m_WxMinVP);
 					re.GLSL().CloudShader().SetWxMaximums(m_WxMaxSP, m_WxMaxVP);
 					re.GLSL().CloudShader().SetWxTexture(m_glTexWx);
@@ -2956,7 +2998,8 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 							// Display a single cloud layer.
 							re.GLSL().CloudShader().SetCloudSunset(.7f);
 							re.GLSL().CloudShader().SetCloudLiftMax(0);
-							m_Atmosphere.DrawGL();
+							drawLift = float(0);
+							drawShell();
 						}
 						break;
 					case 2:
@@ -2968,7 +3011,8 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 							{
 								float lift = liftMax * tops;
 								re.GLSL().CloudShader().SetCloudLiftMax(lift);
-								m_Atmosphere.DrawGL();
+								drawLift = float(lift);
+								drawShell();
 								if(tops == 0)
 									re.GLSL().CloudShader().SetCloudSunset(0);	// Off for remaining layers above.
 							}
@@ -2983,7 +3027,8 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 							{
 								float lift = liftMax * tops / 4;
 								re.GLSL().CloudShader().SetCloudLiftMax(lift);
-								m_Atmosphere.DrawGL();
+								drawLift = float(lift);
+								drawShell();
 								if(tops == -1)
 									re.GLSL().CloudShader().SetCloudSunset(.7f);	// Dim for next layer above.
 								else if(tops == 0)
@@ -3027,7 +3072,9 @@ void DaWorldGlobe::RenderAtmosphere(const AuMatrix4x4& projection, const AuMatri
 			{
 				double rad = baseRad + spanRad * shell / shells;
 				re.GLSL().AtmosphereShader().SetAtmosphereRadius(rad);
-				m_Atmosphere.DrawGL();
+				drawRadius = float(rad);
+				drawLift = 0;
+				drawShell();
 			}
 
 			m_Atmosphere.DeselectGL();
@@ -7466,6 +7513,8 @@ quint8 DaWorldGlobe::VegetationAt(const AuGlobeLL& ll, float terAltMSL, int inEn
 	return (quint8)(vegAt);
 }
 
+// Packed transforms, glow and optional ambient colors are shared by foliage and rocks.
+// Keep the seven-texel record in sync with Flora, FloraDepth and Rock shaders.
 class AuFloraInstances
 {
 private:
@@ -7474,16 +7523,20 @@ private:
 		AuGLVAO*						vao;
 		int								zone;
 		QVector<GLfloat>				data;
+		bool blended;
 	};
 	std::map<std::pair<int, AuGLVAO*>, Group>	m_Groups;
+	QVector<Group> m_OrderedGroups;
+	bool m_Ordered;
 	int									m_Count;
 	static GLuint						s_Buffer;
 	static GLuint						s_Texture;
 
 public:
-	enum { MaxPlants = 10900 };
+	// Seven RGBA texels per instance fit the GL 3.2 minimum 65536-texel buffer.
+	enum { MaxPlants = 9362, InstanceOffsetAttribute = 15 };
 
-	AuFloraInstances() : m_Count(0) {}
+	explicit AuFloraInstances(bool ordered=false) : m_Ordered(ordered), m_Count(0) {}
 
 	bool Room(int n) const
 	{
@@ -7491,18 +7544,32 @@ public:
 	}
 
 	bool Add(AuGLVAO* vao, int zone, const AuMatrix4x4& t, float glowR, float glowG, float glowB, int wind, float fade = 0.f,
-			bool light = false)
+			bool light = false, const AuPoint* ambient = 0, float alpha = 1.f)
 	{
 		if(m_Count >= MaxPlants)
 			return false;
-		Group& g = m_Groups[std::make_pair(zone, vao)];
+		Group* group;
+		if(m_Ordered)
+		{
+			// Merge consecutive matching draws only. Never sort fading instances.
+			if(m_OrderedGroups.isEmpty() || m_OrderedGroups.last().vao!=vao ||
+					m_OrderedGroups.last().zone!=zone || m_OrderedGroups.last().blended!=(alpha<1.f))
+				m_OrderedGroups.append(Group{vao,zone,QVector<GLfloat>(),alpha<1.f});
+			group = &m_OrderedGroups.last();
+		}
+		else
+			group = &m_Groups[std::make_pair(zone, vao)];
+		Group& g = *group;
+		g.blended = alpha<1.f;
 		g.vao = vao;
 		g.zone = zone;
 		const double* m = t.GLMatrix();
 		for(int i=0; i<16; i++)
 			g.data.append((GLfloat)m[i]);
 		g.data << glowR << glowG << glowB << (GLfloat)(wind < 10 ? wind : 0);
-		g.data << fade << (light ? 1.f : 0.f) << 0.f << 0.f;
+		g.data << fade << (light ? 1.f : 0.f) << 0.f << (ambient ? 1.f : 0.f);
+		g.data << (ambient ? GLfloat(ambient->x) : 0.f) << (ambient ? GLfloat(ambient->y) : 0.f)
+				<< (ambient ? GLfloat(ambient->z) : 0.f) << alpha;
 		m_Count++;
 		return true;
 	}
@@ -7512,20 +7579,60 @@ public:
 		return !m_Count;
 	}
 
+	template<class FLUSH> void AppendTo(AuFloraInstances& target, FLUSH flush)
+	{
+		Q_ASSERT(target.m_Ordered && &target != this);
+		auto appendGroup = [&](const Group& source)
+		{
+			const int plants = source.data.count()/28;
+			for(int first=0; first<plants; )
+			{
+				if(!target.Room(1)) flush();
+				const int count = qMin(plants-first, MaxPlants-target.m_Count);
+				if(target.m_OrderedGroups.isEmpty() || target.m_OrderedGroups.last().vao!=source.vao ||
+						target.m_OrderedGroups.last().zone!=source.zone ||
+						target.m_OrderedGroups.last().blended!=source.blended)
+					target.m_OrderedGroups.append(Group{source.vao,source.zone,QVector<GLfloat>(),source.blended});
+				QVector<GLfloat>& data = target.m_OrderedGroups.last().data;
+				const int offset = data.count();
+				data.resize(offset+count*28);
+				std::copy(source.data.constBegin()+first*28, source.data.constBegin()+(first+count)*28, data.begin()+offset);
+				target.m_Count += count;
+				first += count;
+			}
+		};
+		// Opaque queues retain their existing map order; fading queues retain
+		// their submission order. Only consecutive compatible draws may merge.
+		if(m_Ordered)
+			for(const Group& group : m_OrderedGroups) appendGroup(group);
+		else
+			for(auto group=m_Groups.cbegin(); group!=m_Groups.cend(); ++group) appendGroup(group->second);
+		m_Groups.clear();
+		m_OrderedGroups.clear();
+		m_Count = 0;
+	}
+
 	template<class SHADER, class TEXTURE> void Draw(AuOpenGLFunctions& GLf, SHADER& shader, TEXTURE texture, bool upload = true,
 			bool clear = true)
 	{
 		if(!m_Count)
 			return;
 		QVector<GLfloat> all;
-		all.reserve(m_Count * 24);
-		struct Draw { AuGLVAO* vao; int zone; int first; int count; };
+		if(upload) all.reserve(m_Count * 28);
+		int first = 0;
+		struct Draw { AuGLVAO* vao; int zone; int first; int count; bool blended; };
 		QVector<Draw> draws;
-		for(auto gi = m_Groups.cbegin(); gi != m_Groups.cend(); gi++)
+		auto appendGroup = [&](const Group& g)
 		{
-			draws.append(Draw{gi->second.vao, gi->second.zone, all.count() / 24, gi->second.data.count() / 24});
-			all += gi->second.data;
-		}
+			draws.append(Draw{g.vao,g.zone,first,g.data.count()/28,g.blended});
+			first += g.data.count()/28;
+			if(upload) all += g.data;
+		};
+		if(m_Ordered)
+			for(const Group& g : m_OrderedGroups) appendGroup(g);
+		else
+			for(auto gi=m_Groups.cbegin(); gi!=m_Groups.cend(); gi++) appendGroup(gi->second);
+
 		if(!s_Buffer)
 		{
 			GLf.glGenBuffers(1, &s_Buffer);
@@ -7533,32 +7640,58 @@ public:
 		}
 		if(upload)
 		{
+			AuFrameTiming::Scope timing(AuFrameTiming::BufferUpdate);
 			GLf.glBindBuffer(GL_TEXTURE_BUFFER, s_Buffer);
+			// Keep orphaning here: updating a live store stalls some GL drivers,
+			// even when the appended ranges do not overlap earlier draws.
 			GLf.glBufferData(GL_TEXTURE_BUFFER, all.count() * sizeof(GLfloat), all.constData(), GL_STREAM_DRAW);
 			GLf.glBindBuffer(GL_TEXTURE_BUFFER, 0);
 		}
 		GLf.glActiveTexture(GL_TEXTURE0 + AuGLSLFlora::InstanceUnit);
 		GLf.glBindTexture(GL_TEXTURE_BUFFER, s_Texture);
-		GLf.glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, s_Buffer);
+		if(upload) GLf.glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, s_Buffer);
 		GLf.glActiveTexture(GL_TEXTURE0);
 
-		int zone = -1;
+		// Changing an offset uniform for every draw dirties the large lighting
+		// block on some drivers. Use a reserved constant vertex attribute instead.
+		QOpenGLFunctions* vertexFunctions = QOpenGLContext::currentContext()->functions();
+		GLfloat previousOffset[4];
+		GLf.glGetVertexAttribfv(InstanceOffsetAttribute, GL_CURRENT_VERTEX_ATTRIB, previousOffset);
+		shader.SetInstanced(true, 0);
+		int zone = -1, blended = -1;
+		AuGLVAO* selected = 0;
 		for(const Draw& d : draws)
 		{
 			if(d.zone != zone)
 			{
+				if(zone == -1)
+					shader.SetTexture(texture(d.zone));
+				else
+					// The sampler remains on unit 0; avoid dirtying it again.
+					GLf.glBindTexture(GL_TEXTURE_2D, texture(d.zone));
 				zone = d.zone;
-				shader.SetTexture(texture(zone));
 			}
-			shader.SetInstanced(true, d.first);
-			d.vao->SelectGL();
+			if(m_Ordered && blended!=int(d.blended))
+			{
+				blended = int(d.blended);
+				if(d.blended) GLf.glEnable(GL_BLEND); else GLf.glDisable(GL_BLEND);
+			}
+			vertexFunctions->glVertexAttrib1f(InstanceOffsetAttribute, GLfloat(d.first));
+			if(selected != d.vao)
+			{
+				if(selected) selected->DeselectGL();
+				selected = d.vao;
+				selected->SelectGL();
+			}
 			d.vao->DrawGLInstanced(d.count);
-			d.vao->DeselectGL();
 		}
+		if(selected) selected->DeselectGL();
 		shader.SetInstanced(false);
+		vertexFunctions->glVertexAttrib4fv(InstanceOffsetAttribute, previousOffset);
 		if(clear)
 		{
 			m_Groups.clear();
+			m_OrderedGroups.clear();
 			m_Count = 0;
 		}
 	}
@@ -7566,46 +7699,6 @@ public:
 
 GLuint AuFloraInstances::s_Buffer = 0;
 GLuint AuFloraInstances::s_Texture = 0;
-
-class AuViewFrustum
-{
-private:
-	double								m_Plane[5][4];
-
-public:
-	explicit AuViewFrustum(const AuMatrix4x4& projection)
-	{
-		const double* m = projection.GLMatrix();
-		double row[4][4];
-		for(int r=0; r<4; r++)
-			for(int c=0; c<4; c++)
-				row[r][c] = m[c*4 + r];
-		const int axis[5] = { 0, 0, 1, 1, 2 };
-		const double sign[5] = { 1, -1, 1, -1, 1 };
-		for(int p=0; p<5; p++)
-		{
-			double len = 0;
-			for(int c=0; c<4; c++)
-				m_Plane[p][c] = row[3][c] + sign[p] * row[axis[p]][c];
-			for(int c=0; c<3; c++)
-				len += m_Plane[p][c] * m_Plane[p][c];
-			len = sqrt(len);
-			if(len > 0)
-				for(int c=0; c<4; c++)
-					m_Plane[p][c] /= len;
-		}
-	}
-
-	inline bool Sees(const AuPoint& p, double radius) const
-	{
-		for(int k=0; k<5; k++)
-			if(m_Plane[k][0]*p.x + m_Plane[k][1]*p.y + m_Plane[k][2]*p.z + m_Plane[k][3] < -radius)
-				return false;
-		return true;
-	}
-};
-
-static const double s_GrassReach = 8, s_ShrubReach = 40, s_TreeReach = 140;
 
 static float FloraLodFt(bool tree)
 {
@@ -7882,6 +7975,7 @@ void DaWorldGlobe::RenderNearGlobe(const AuMatrix4x4& projection, const AuMatrix
 void DaWorldGlobe::RenderNearGlobeFog(const AuMatrix4x4& projection, const AuMatrix4x4& model, AuAtomRenderInfo& ari,
 		float ambientLight, float fogDensity, float fogR, float fogG, float fogB)
 {
+	AuGpuProfile gpuProfile("terrain.near");
 	if(fogDensity <= 0)
 	{
 		// Don't bother with fog calculations when there is no fog.
@@ -8012,6 +8106,7 @@ void DaWorldGlobe::UpdateNearSurfaceTexture(AuAtomRenderInfo& ari)
 void DaWorldGlobe::RenderAtGlobe(const AuMatrix4x4& projection, const AuMatrix4x4& model, AuAtomRenderInfo& ari,
 		const AuPoint& viewerPos, float ambientLight, float fogDensity, float fogR, float fogG, float fogB)
 {
+	AuGpuProfile gpuProfile("terrain.at");
 	//qDebug() << "DaWorldGlobe::RenderAtGlobe" << Id() << Name() << "vao" << m_AtGlobe.VAO();
 	if(!m_AtGlobe.m_Low.VAO())
 	{
@@ -8026,6 +8121,8 @@ void DaWorldGlobe::RenderAtGlobe(const AuMatrix4x4& projection, const AuMatrix4x
 
 	if(g_Au.m_DebugSwitches & 0x00000040)
 		return;
+
+	const AuViewClip viewClip(projection, model);
 
 //#if !defined(QT_NO_DEBUG)
 	//glDisable(GL_CULL_FACE);
@@ -8134,9 +8231,15 @@ void DaWorldGlobe::RenderAtGlobe(const AuMatrix4x4& projection, const AuMatrix4x
 				if(vi != m_AtGlobe.m_TriVAOs.end())
 				{
 					// Display the high-tessellation VAO.
-					(*vi).second.SelectGL();
-					(*vi).second.DrawGL();
-					(*vi).second.DeselectGL();
+					if((*vi).second.InView(viewClip))
+					{
+						(*vi).second.SelectGL();
+						(*vi).second.DrawGL();
+						(*vi).second.DeselectGL();
+					}
+					else
+						(*vi).second.m_LastSelected.restart(); // Keep nearby cached patches warm when looking away.
+					// A ready offscreen patch still counts as coverage for the low-detail globe's clip mask.
 					countShown++;
 				}
 			}
@@ -8235,9 +8338,15 @@ void DaWorldGlobe::RenderAtGlobe(const AuMatrix4x4& projection, const AuMatrix4x
 				if(vi != m_AtGlobe.m_TriVAOs.end())
 				{
 					// Display the high-tessellation VAO.
-					(*vi).second.SelectGL();
-					(*vi).second.DrawGL();
-					(*vi).second.DeselectGL();
+					if((*vi).second.InView(viewClip))
+					{
+						(*vi).second.SelectGL();
+						(*vi).second.DrawGL();
+						(*vi).second.DeselectGL();
+					}
+					else
+						(*vi).second.m_LastSelected.restart(); // Keep nearby cached patches warm when looking away.
+					// A ready offscreen patch still counts as coverage for the low-detail globe's clip mask.
 					countShown++;
 				}
 			}
@@ -8366,6 +8475,7 @@ void DaWorldGlobe::RenderAtGlobe(const AuMatrix4x4& projection, const AuMatrix4x
 void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4& model, AuGLEffects& re, AuGLModelMaker& mm,
 		const AuPoint& viewerPos, float ambientLight, float fogDensity, float fogR, float fogG, float fogB)
 {
+	AuGpuProfile gpuProfile("flora");
 	if(g_Au.m_DebugSwitches & 0x00000200)
 		return;
 
@@ -8534,35 +8644,37 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 	const bool instancing = g_Au.NewFlora();
 	// Batch opaque legacy meshes too, without enabling the new palette or LODs.
 	AuFloraInstances instances;
-	const AuViewFrustum frustum(projection);
+	AuFloraInstances fadingInstances(true);
+	// Stage adjacent queue flushes into one bounded stream. Keep orphaning the
+	// whole store per chunk instead of updating storage still used by the GPU.
+	AuFloraInstances landSubmissions(true);
+	const AuViewClip floraClip(projection, model);
 	float ambR = ambientLight;
 	float ambG = ambientLight;
 	float ambB = ambientLight;
-	// Flush before any unbatched draw so transparency and city lighting retain
-	// their original order. Restore the uniforms tracked by the legacy loops.
-	auto flushLegacyInstances = [&]()
+	// Opaque batches may group by mesh. Fading batches retain consecutive order.
+	auto drawInstances = [&](AuFloraInstances& queue)
 	{
-		if(instancing || instances.IsEmpty())
-			return;
-		if(curvao)
-		{
-			curvao->DeselectGL();
-			curvao = 0;
-		}
+		if(queue.IsEmpty()) return;
 		AuGLSLFlora& shader = re.GLSL().FloraShader();
-		shader.SetAmbientLight(ambientLight, ambientLight, ambientLight);
-		shader.SetGlowAlpha(0, 0, 0, 1.f);
+		shader.SetAmbientLight(ambientLight,ambientLight,ambientLight);
+		shader.SetGlowAlpha(0,0,0,1.f);
 		shader.SetForceVectors(windVec);
 		re.glDisable(GL_BLEND);
-		instances.Draw(re, shader, [&](int zone) { return m_pFlora[zone].Texture(); });
-		shader.SetTexture(m_pFlora[resourceZone].Texture());
-		shader.SetAmbientLight(ambR, ambG, ambB);
-		shader.SetGlowAlpha(glowR, glowG, glowB, curPlantAlpha);
-		if(windIndex >= 0 && windIndex < 10)
-			shader.SetForceVector(windVec[windIndex].x, windVec[windIndex].y, windVec[windIndex].z);
-		if(curPlantAlpha < 1.f)
-			re.glEnable(GL_BLEND);
+		queue.Draw(re,shader,[&](int zone) { return m_pFlora[zone].Texture(); });
+		// Preserve the tracked legacy state for the following render stages.
+		shader.SetAmbientLight(ambR,ambG,ambB);
+		shader.SetGlowAlpha(glowR,glowG,glowB,curPlantAlpha);
+		if(windIndex>=0 && windIndex<10)
+			shader.SetForceVector(windVec[windIndex].x,windVec[windIndex].y,windVec[windIndex].z);
+		if(curPlantAlpha<1.f) re.glEnable(GL_BLEND); else re.glDisable(GL_BLEND);
 	};
+	auto flushLandSubmissions = [&]() { drawInstances(landSubmissions); };
+	auto flushLegacyInstances = [&]()
+	{
+		if(!instancing) instances.AppendTo(landSubmissions, flushLandSubmissions);
+	};
+	auto flushFadingInstances = [&]() { fadingInstances.AppendTo(landSubmissions, flushLandSubmissions); };
 	double gfadeDist = g_Au.GrassViewRangeFt() * .8;				// Distance at which plants start to become transparent
 	double gfadeRange = g_Au.GrassViewRangeFt() - gfadeDist;
 	for(QMap<AuResKey, AuGlobeFlora>::const_iterator gi = m_Grass.cbegin(); gi != m_Grass.cend(); gi++)
@@ -8576,8 +8688,6 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 			AuPoint viewPt = model.Project((*gi).Location());
 			if(viewPt.z > 0)
 				continue;
-			if(instancing && !frustum.Sees(viewPt, s_GrassReach))
-				continue;	// Grass is behind viewer.
 		}
 
 		// Calculate alpha based on distance from viewer.
@@ -8598,29 +8708,11 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 				if(!m_pFlora[resourceZone].Texture())
 					continue;
 			}
-			re.GLSL().FloraShader().SetTexture(m_pFlora[resourceZone].Texture());
 		}
 
-		// Configure glow.
-		if((*gi).m_GlowR != glowR || (*gi).m_GlowG != glowG || (*gi).m_GlowB != glowB || plantAlpha != curPlantAlpha)
-		{
-			glowR = (*gi).m_GlowR;
-			glowG = (*gi).m_GlowG;
-			glowB = (*gi).m_GlowB;
-			curPlantAlpha = plantAlpha;
-			re.GLSL().FloraShader().SetGlowAlpha(glowR, glowG, glowB, plantAlpha);
-			if(plantAlpha >= 1.f)
-				re.glDisable(GL_BLEND);
-			else
-				re.glEnable(GL_BLEND);
-		}
-
-		// Select a wind vector for the plant.
-		if((*gi).m_WindIndex != windIndex)
-		{
-			windIndex = (*gi).m_WindIndex;
-			re.GLSL().FloraShader().SetForceVector(windVec[windIndex].x, windVec[windIndex].y, windVec[windIndex].z);
-		}
+		glowR=(*gi).m_GlowR; glowG=(*gi).m_GlowG; glowB=(*gi).m_GlowB;
+		curPlantAlpha=plantAlpha;
+		windIndex=(*gi).m_WindIndex;
 
 		// Insure we have the specific VAO that is referenced.
 		AuGLVAO* vao = m_FloraVAOsHigh[(*gi).m_VAOIndex];
@@ -8640,32 +8732,23 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 		}
 
 		Q_ASSERT(vao->VAO());
-
-		if(plantAlpha >= 1.f &&
-				instances.Add(vao, resourceZone, (*gi).Transform(), (*gi).m_GlowR, (*gi).m_GlowG, (*gi).m_GlowB, (*gi).m_WindIndex))
+		const int forceIndex = (*gi).m_WindIndex<10 ? (*gi).m_WindIndex : 0;
+		if(!vao->FloraInView(floraClip, (*gi).Transform(), windVec[forceIndex]))
 			continue;
 
-		flushLegacyInstances();
-		// Multiply by model matrix to place the plant in the view.
-		re.GLSL().FloraShader().SetPlantMatrix((*gi).Transform());
 
-		if(vao != curvao)
+		if(plantAlpha>=1.f)
 		{
-			if(curvao)
-				curvao->DeselectGL();
-			vao->SelectGL();
-			curvao = vao;
+			if(!instancing) flushFadingInstances();
+			if(!instancing && !instances.Room(1)) flushLegacyInstances();
+			if(instances.Add(vao,resourceZone,(*gi).Transform(),glowR,glowG,glowB,windIndex)) continue;
 		}
-		vao->DrawGL();
+		flushLegacyInstances();
+		if(!fadingInstances.Room(1)) flushFadingInstances();
+		fadingInstances.Add(vao,resourceZone,(*gi).Transform(),glowR,glowG,glowB,windIndex,0,false,0,plantAlpha);
 	}
-
 	flushLegacyInstances();
-
-	if(curvao)
-	{
-		curvao->DeselectGL();
-		curvao = 0;
-	}
+	flushFadingInstances();
 
 
 	for(QMap<AuResKey, AuGlobeFlora>::iterator gi = m_Shrubs.begin(); gi != m_Shrubs.end(); gi++)
@@ -8687,7 +8770,6 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 				if(!m_pFlora[resourceZone].Texture())
 					continue;
 			}
-			re.GLSL().FloraShader().SetTexture(m_pFlora[resourceZone].Texture());
 		}
 
 		auto plantVAO = [&](bool light) -> AuGLVAO*
@@ -8724,94 +8806,50 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 			}
 			return slot;
 		};
-		if(instancing && !frustum.Sees(viewPt, s_ShrubReach))
-			continue;
 		const float lightShare = instancing ? FloraLodBlend(sqrtf((float)viewPt.Length2()), FloraLodFt(false)) : 0.f;
 
-		if(plantAlpha >= 1.f && (*gi).m_CityR == 0 && (*gi).m_CityG == 0 && (*gi).m_CityB == 0 &&
-				instances.Room(lightShare > 0.f && lightShare < 1.f ? 2 : 1))
+		const bool batchable = plantAlpha >= 1.f &&
+				instances.Room(lightShare > 0.f && lightShare < 1.f ? 2 : 1);
+		const int forceIndex = (*gi).m_WindIndex<10 ? (*gi).m_WindIndex : 0;
+		AuGLVAO* fallbackVAO = 0;
+		if(!batchable)
 		{
+			fallbackVAO = plantVAO(lightShare >= .5f);
+			if(!fallbackVAO->VAO() || !fallbackVAO->FloraInView(floraClip, (*gi).Transform(), windVec[forceIndex]))
+				continue;
+		}
+		if(batchable)
+		{
+			if(!instancing) flushFadingInstances();
 			const AuMatrix4x4& t = (*gi).Transform();
+			const AuPoint plantAmbient(ambientLight + (*gi).m_CityR, ambientLight + (*gi).m_CityG, ambientLight + (*gi).m_CityB);
 			if(lightShare < 1.f)
 			{
 				AuGLVAO* vao = plantVAO(false);
-				if(vao->VAO())
-					instances.Add(vao, resourceZone, t, (*gi).m_GlowR, (*gi).m_GlowG, (*gi).m_GlowB, (*gi).m_WindIndex, lightShare);
+				if(vao->VAO() && vao->FloraInView(floraClip, t, windVec[forceIndex]))
+					instances.Add(vao, resourceZone, t, (*gi).m_GlowR, (*gi).m_GlowG, (*gi).m_GlowB, (*gi).m_WindIndex, lightShare, false, &plantAmbient);
 			}
 			if(lightShare > 0.f)
 			{
 				AuGLVAO* vao = plantVAO(true);
-				if(vao->VAO())
+				if(vao->VAO() && vao->FloraInView(floraClip, t, windVec[forceIndex]))
 					instances.Add(vao, resourceZone, t, (*gi).m_GlowR, (*gi).m_GlowG, (*gi).m_GlowB, (*gi).m_WindIndex,
-							lightShare < 1.f ? -lightShare : 0.f, true);
+							lightShare < 1.f ? -lightShare : 0.f, true, &plantAmbient);
 			}
 			continue;
 		}
 
 		flushLegacyInstances();
-		// Configure ambient light.
-		float iambR = ambientLight + (*gi).m_CityR;
-		float iambG = ambientLight + (*gi).m_CityG;
-		float iambB = ambientLight + (*gi).m_CityB;
-		if(iambR != ambR || iambG != ambG || iambB != ambB)
-		{
-			ambR = iambR;
-			ambG = iambG;
-			ambB = iambB;
-			re.GLSL().FloraShader().SetAmbientLight(ambR, ambG, ambB);
-		}
-
-		// Configure glow.
-		if((*gi).m_GlowR != glowR || (*gi).m_GlowG != glowG || (*gi).m_GlowB != glowB || plantAlpha != curPlantAlpha)
-		{
-			glowR = (*gi).m_GlowR;
-			glowG = (*gi).m_GlowG;
-			glowB = (*gi).m_GlowB;
-			curPlantAlpha = plantAlpha;
-			re.GLSL().FloraShader().SetGlowAlpha(glowR, glowG, glowB, plantAlpha);
-			if(plantAlpha >= 1.f)
-				re.glDisable(GL_BLEND);
-			else
-				re.glEnable(GL_BLEND);
-		}
-
-		// Select a wind vector for the plant.
-		if((*gi).m_WindIndex != windIndex)
-		{
-			windIndex = (*gi).m_WindIndex;
-			re.GLSL().FloraShader().SetForceVector(windVec[windIndex].x, windVec[windIndex].y, windVec[windIndex].z);
-		}
-
-		// Insure we have the specific VAO that is referenced.
-
-		AuGLVAO* vao = plantVAO(lightShare >= .5f);
-		if(!vao->VAO())
-			continue;
-			// Create the specific VAO model we need.
-
-			// Create VAO of typical shrub.
-
-
-		// Multiply by model matrix to place the plant in the view.
-		re.GLSL().FloraShader().SetPlantMatrix((*gi).Transform());
-
-		if(vao != curvao)
-		{
-			if(curvao)
-				curvao->DeselectGL();
-			vao->SelectGL();
-			curvao = vao;
-		}
-		vao->DrawGL();
+		ambR=ambientLight+(*gi).m_CityR; ambG=ambientLight+(*gi).m_CityG; ambB=ambientLight+(*gi).m_CityB;
+		glowR=(*gi).m_GlowR; glowG=(*gi).m_GlowG; glowB=(*gi).m_GlowB;
+		curPlantAlpha=plantAlpha; windIndex=(*gi).m_WindIndex;
+		if(!fadingInstances.Room(1)) flushFadingInstances();
+		const AuPoint plantAmbient(ambR,ambG,ambB);
+		fadingInstances.Add(fallbackVAO,resourceZone,(*gi).Transform(),glowR,glowG,glowB,windIndex,0,false,&plantAmbient,plantAlpha);
 	}
-
 	flushLegacyInstances();
+	flushFadingInstances();
 
-	if(curvao)
-	{
-		curvao->DeselectGL();
-		curvao = 0;
-	}
 
 	for(QMap<AuResKey, AuGlobeTree>::iterator gi = m_Trees.begin(); gi != m_Trees.end(); gi++)
 	{
@@ -8832,7 +8870,6 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 				if(!m_pFlora[resourceZone].Texture())
 					continue;
 			}
-			re.GLSL().FloraShader().SetTexture(m_pFlora[resourceZone].Texture());
 		}
 
 		auto plantVAO = [&](bool light) -> AuGLVAO*
@@ -8869,94 +8906,52 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 			}
 			return slot;
 		};
-		if(instancing && !frustum.Sees(viewPt, s_TreeReach))
-			continue;
 		const float lightShare = instancing ? FloraLodBlend(sqrtf((float)viewPt.Length2()), FloraLodFt(true)) : 0.f;
 
-		if(plantAlpha >= 1.f && (*gi).m_CityR == 0 && (*gi).m_CityG == 0 && (*gi).m_CityB == 0 &&
-				instances.Room(lightShare > 0.f && lightShare < 1.f ? 2 : 1))
+		const bool batchable = plantAlpha >= 1.f &&
+				instances.Room(lightShare > 0.f && lightShare < 1.f ? 2 : 1);
+		const int forceIndex = (*gi).m_WindIndex<10 ? (*gi).m_WindIndex : 0;
+		AuGLVAO* fallbackVAO = 0;
+		if(!batchable)
 		{
+			fallbackVAO = plantVAO(lightShare >= .5f);
+			if(!fallbackVAO->VAO() || !fallbackVAO->FloraInView(floraClip, (*gi).Transform(), windVec[forceIndex]))
+				continue;
+		}
+		if(batchable)
+		{
+			if(!instancing) flushFadingInstances();
 			const AuMatrix4x4& t = (*gi).Transform();
+			const AuPoint plantAmbient(ambientLight + (*gi).m_CityR, ambientLight + (*gi).m_CityG, ambientLight + (*gi).m_CityB);
 			if(lightShare < 1.f)
 			{
 				AuGLVAO* vao = plantVAO(false);
-				if(vao->VAO())
-					instances.Add(vao, resourceZone, t, (*gi).m_GlowR, (*gi).m_GlowG, (*gi).m_GlowB, (*gi).m_WindIndex, lightShare);
+				if(vao->VAO() && vao->FloraInView(floraClip, t, windVec[forceIndex]))
+					instances.Add(vao, resourceZone, t, (*gi).m_GlowR, (*gi).m_GlowG, (*gi).m_GlowB, (*gi).m_WindIndex, lightShare, false, &plantAmbient);
 			}
 			if(lightShare > 0.f)
 			{
 				AuGLVAO* vao = plantVAO(true);
-				if(vao->VAO())
+				if(vao->VAO() && vao->FloraInView(floraClip, t, windVec[forceIndex]))
 					instances.Add(vao, resourceZone, t, (*gi).m_GlowR, (*gi).m_GlowG, (*gi).m_GlowB, (*gi).m_WindIndex,
-							lightShare < 1.f ? -lightShare : 0.f, true);
+							lightShare < 1.f ? -lightShare : 0.f, true, &plantAmbient);
 			}
 			continue;
 		}
 
 		flushLegacyInstances();
-		// Configure ambient light.
-		float iambR = ambientLight + (*gi).m_CityR;
-		float iambG = ambientLight + (*gi).m_CityG;
-		float iambB = ambientLight + (*gi).m_CityB;
-		if(iambR != ambR || iambG != ambG || iambB != ambB)
-		{
-			ambR = iambR;
-			ambG = iambG;
-			ambB = iambB;
-			re.GLSL().FloraShader().SetAmbientLight(ambR, ambG, ambB);
-		}
-
-		// Configure glow.
-		if((*gi).m_GlowR != glowR || (*gi).m_GlowG != glowG || (*gi).m_GlowB != glowB || plantAlpha != curPlantAlpha)
-		{
-			glowR = (*gi).m_GlowR;
-			glowG = (*gi).m_GlowG;
-			glowB = (*gi).m_GlowB;
-			curPlantAlpha = plantAlpha;
-			re.GLSL().FloraShader().SetGlowAlpha(glowR, glowG, glowB, plantAlpha);
-			if(plantAlpha >= 1.f)
-				re.glDisable(GL_BLEND);
-			else
-				re.glEnable(GL_BLEND);
-		}
-
-		// Select a wind vector for the plant.
-		if((*gi).m_WindIndex != windIndex)
-		{
-			windIndex = (*gi).m_WindIndex;
-			re.GLSL().FloraShader().SetForceVector(windVec[windIndex].x, windVec[windIndex].y, windVec[windIndex].z);
-		}
-
-		// Insure we have the specific VAO that is referenced.
-
-		AuGLVAO* vao = plantVAO(lightShare >= .5f);
-		if(!vao->VAO())
-			continue;
-			// Create the specific VAO model we need.
-
-			// Create VAO of typical tree.
-
-
-		// Multiply by model matrix to place the plant in the view.
-		re.GLSL().FloraShader().SetPlantMatrix((*gi).Transform());
-
-		if(vao != curvao)
-		{
-			if(curvao)
-				curvao->DeselectGL();
-			vao->SelectGL();
-			curvao = vao;
-		}
-		vao->DrawGL();
+		ambR=ambientLight+(*gi).m_CityR; ambG=ambientLight+(*gi).m_CityG; ambB=ambientLight+(*gi).m_CityB;
+		glowR=(*gi).m_GlowR; glowG=(*gi).m_GlowG; glowB=(*gi).m_GlowB;
+		curPlantAlpha=plantAlpha; windIndex=(*gi).m_WindIndex;
+		if(!fadingInstances.Room(1)) flushFadingInstances();
+		const AuPoint plantAmbient(ambR,ambG,ambB);
+		fadingInstances.Add(fallbackVAO,resourceZone,(*gi).Transform(),glowR,glowG,glowB,windIndex,0,false,&plantAmbient,plantAlpha);
 	}
-
 	flushLegacyInstances();
+	flushFadingInstances();
 
-	if(curvao)
-	{
-		curvao->DeselectGL();
-		curvao = 0;
-	}
+
+	flushLandSubmissions();
 
 	if(!instances.IsEmpty())
 	{
@@ -9247,6 +9242,7 @@ void DaWorldGlobe::RenderFlora(const AuMatrix4x4& projection, const AuMatrix4x4&
 void DaWorldGlobe::RenderRocks(const AuMatrix4x4& projection, const AuMatrix4x4& model, AuGLEffects& re, AuGLModelMaker& mm,
 		const AuPoint& viewerPos, float ambientLight, float fogDensity, float fogR, float fogG, float fogB)
 {
+	AuGpuProfile gpuProfile("rocks");
 	if(g_Au.m_DebugSwitches & 0x10000000)
 		return;
 	if(!m_RockVAOs)
@@ -9310,7 +9306,22 @@ void DaWorldGlobe::RenderRocks(const AuMatrix4x4& projection, const AuMatrix4x4&
 	float ambG = ambientLight;
 	float ambB = ambientLight;
 
+	AuFloraInstances instances;
+	const AuViewClip rockClip(projection, model);
 	AuGLVAO* curvao = 0;
+	auto flushInstances = [&]()
+	{
+		if(instances.IsEmpty()) return;
+		if(curvao) { curvao->DeselectGL(); curvao=0; }
+		AuGLSLRock& shader = re.GLSL().RockShader();
+		shader.SetAmbientLight(ambientLight,ambientLight,ambientLight);
+		shader.SetGlowAlpha(0,0,0,1);
+		re.glDisable(GL_BLEND);
+		instances.Draw(re,shader,[&](int) { return s_TexRock; });
+		shader.SetAmbientLight(ambR,ambG,ambB);
+		shader.SetGlowAlpha(glowR,glowG,glowB,curRockAlpha);
+		if(curRockAlpha<1.f) re.glEnable(GL_BLEND);
+	};
 	for(QMap<AuResKey, AuGlobeRock>::iterator gi = m_Rocks.begin(); gi != m_Rocks.end(); gi++)
 	{
 		// Calculate alpha based on position in the scene.
@@ -9318,6 +9329,33 @@ void DaWorldGlobe::RenderRocks(const AuMatrix4x4& projection, const AuMatrix4x4&
 		float rockAlpha = (*gi).ViewAlpha(33, viewPt, groundPos, g_Au.RockViewRangeFt2(), 20);
 		if(rockAlpha <= 0.)
 			continue;
+
+		// Insure we have the specific VAO that is referenced.
+		AuGLVAO* vao = m_RockVAOs[(*gi).m_VAOIndex];
+		if(!vao)
+		{
+			// Create a vao.
+			vao = new AuGLVAO;
+			m_RockVAOs[(*gi).m_VAOIndex] = vao;
+		}
+
+		if(!vao->VAO())
+		{
+			// Create the specific VAO model we need.
+			(*gi).CreateVAO(re, *vao);
+		}
+
+		if(!vao->VAO() || !vao->FloraInView(rockClip,(*gi).Transform(),AuPoint()))
+			continue;
+		if(rockAlpha>=1.f)
+		{
+			const AuPoint rockAmbient(ambientLight+(*gi).m_CityR,ambientLight+(*gi).m_CityG,ambientLight+(*gi).m_CityB);
+			if(!instances.Room(1)) flushInstances();
+			instances.Add(vao,0,(*gi).Transform(),(*gi).m_GlowR,(*gi).m_GlowG,(*gi).m_GlowB,0,0,false,&rockAmbient);
+			continue;
+		}
+		// Keep every fading draw in its original position relative to opaque draws.
+		flushInstances();
 
 		// Configure ambient light.
 		float iambR = ambientLight + (*gi).m_CityR;
@@ -9345,20 +9383,6 @@ void DaWorldGlobe::RenderRocks(const AuMatrix4x4& projection, const AuMatrix4x4&
 				re.glEnable(GL_BLEND);
 		}
 
-		// Insure we have the specific VAO that is referenced.
-		AuGLVAO* vao = m_RockVAOs[(*gi).m_VAOIndex];
-		if(!vao)
-		{
-			// Create a vao.
-			vao = new AuGLVAO;
-			m_RockVAOs[(*gi).m_VAOIndex] = vao;
-		}
-
-		if(!vao->VAO())
-		{
-			// Create the specific VAO model we need.
-			(*gi).CreateVAO(re, *vao);
-		}
 
 		if(vao->VAO())
 		{
@@ -9375,6 +9399,8 @@ void DaWorldGlobe::RenderRocks(const AuMatrix4x4& projection, const AuMatrix4x4&
 			vao->DrawGL();
 		}
 	}
+
+	flushInstances();
 
 	if(curvao)
 	{

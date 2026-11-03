@@ -12,7 +12,6 @@
 #endif
 #SunLight
 
-uniform LightSources					light;
 uniform vec4							glowAlpha;
 #endif
 
@@ -38,7 +37,7 @@ void main()
 	//if(texCol.a < .1)
 		//discard;
 #ifdef PER_PIXEL_LIGHTING
-	vec4 vertColor = vec4(computeLighting(light, vertLitShininess, vertLitReflectiveness * PER_PIXEL_HAIR_GLOSS, vertLitP, normalize(vertLitN)), 1) * vertLitScale;
+	vec4 vertColor = vec4(computeLighting( vertLitShininess, vertLitReflectiveness * PER_PIXEL_HAIR_GLOSS, vertLitP, normalize(vertLitN)), 1) * vertLitScale;
 	vertColor.rgb = min(vertColor.rgb + glowAlpha.rgb, vec3(1.5, 1.5, 1.5));
 #endif
 	fragColor = texCol * hairColor * vertColor;

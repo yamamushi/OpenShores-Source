@@ -41,6 +41,9 @@ struct LightSources
 	SunLight							sun2;
 };
 
+// Keep the light array in uniform storage while evaluating lighting.
+uniform LightSources light;
+
 #ifdef SHADOWS
 #define MAX_SHADOW_BODIES 8
 uniform int								shadowBodyCount;
@@ -267,8 +270,7 @@ void computePointLight(PointLight light,
 	oDiffuse = light.color * lighting * attenuation;
 }
 
-vec3 computeLighting(LightSources light,
-			vec3 P,
+vec3 computeLighting(vec3 P,
 			vec3 N)
 {
 	vec3 diffuseLight = vec3(0,0,0);
@@ -323,7 +325,6 @@ vec3 computeLighting(LightSources light,
 	return clamp(color, vec3(0,0,0), vec3(1,1,1));
 }
 
-uniform LightSources					light;
 #endif
 
 uniform vec3							fogColor;				// Fog color
@@ -348,7 +349,7 @@ void main()
 		discard;
 
 #ifdef PER_PIXEL_LIGHTING
-	vec4 vertColor = vec4(computeLighting(light, vertLitP, normalize(vertLitN)), 1) * vertLitScale;
+	vec4 vertColor = vec4(computeLighting(vertLitP, normalize(vertLitN)), 1) * vertLitScale;
 #endif
 	// Modulate with vertColor for lighting effect.
 	fragColor *= vertColor;

@@ -1,5 +1,7 @@
 #version 150
 
+in float instanceOffset;
+
 uniform mat4							mv;
 uniform mat4							p;
 uniform mat4							plantM;
@@ -21,7 +23,7 @@ void main()
 	vec3 force = vForce;
 	if(instanced != 0)
 	{
-		int at = (instanceBase + gl_InstanceID) * 6;
+		int at = (instanceBase + int(instanceOffset) + gl_InstanceID) * 7;
 		placement = mat4(texelFetch(instances, at), texelFetch(instances, at + 1), texelFetch(instances, at + 2),
 				texelFetch(instances, at + 3));
 		vec4 glowWind = texelFetch(instances, at + 4);

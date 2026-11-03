@@ -512,6 +512,7 @@ AuGLVAO AuClothingMesh::CreateAnimalClothingVAO(AuOpenGLFunctions& re, bool skip
 
 	// Generate vertex array object with a buffer for each array.
 	vao.CreateGL(re, vertices, 7);
+	vao.SetPaletteRanges(texCoordClothing+2, vertices, 3);
 
 	vao.SelectGL();
 
@@ -731,6 +732,7 @@ AuGLVAO AuClothingMesh::CreateAnimalClothingBlendVAO(AuOpenGLFunctions& re) cons
 
 	// Generate vertex array object with a buffer for each array.
 	vao.CreateGL(re, vertices, 7);
+	vao.SetPaletteRanges(texCoordClothing+2, vertices, 3);
 
 	vao.SelectGL();
 
@@ -952,6 +954,7 @@ AuGLVAO AuClothingMesh::CreateHeadClothingVAO(AuOpenGLFunctions& re) const
 
 	// Generate vertex array object with a buffer for each array.
 	vao.CreateGL(re, vertices, 7);
+	vao.SetPaletteRanges(texCoordClothing+2, vertices, 3);
 
 	vao.SelectGL();
 
@@ -1173,6 +1176,7 @@ AuGLVAO AuClothingMesh::CreateHeadClothingBlendVAO(AuOpenGLFunctions& re) const
 
 	// Generate vertex array object with a buffer for each array.
 	vao.CreateGL(re, vertices, 7);
+	vao.SetPaletteRanges(texCoordClothing+2, vertices, 3);
 
 	vao.SelectGL();
 

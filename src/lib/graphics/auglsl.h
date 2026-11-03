@@ -8,6 +8,9 @@
 #ifndef AuGLSL_H
 #define AuGLSL_H
 
+#include "auviewclip.h"
+#include "aucompactpalette.h"
+#include "auviewranges.h"
 #include "augl.h"
 #include "aumatrix4x4.h"
 #include "auscface.h"
@@ -166,6 +169,11 @@ public:
 class AUGL_DLL AuGLVAO
 {
 private:
+	AuViewRanges m_ViewRanges;
+	AuPaletteRanges m_PaletteRanges;
+	AuPoint m_FloraMin, m_FloraMax;
+	float m_FloraMove;
+	bool m_FloraBoundsValid;
 	GLuint								m_BufferCount;			// Count of buffer ids in m_Buffers.
 	GLuint*								m_Buffers;				// Array of GLuints.
 	AuOpenGLFunctions*					m_GLf;
@@ -184,6 +192,8 @@ public:
 		m_Vertices = 0;
 		m_IndexBuffer = 0;
 		m_Indices = 0;
+		m_FloraMove = 0;
+		m_FloraBoundsValid = false;
 	}
 
 	inline AuGLVAO(const AuGLVAO& c)
@@ -201,6 +211,12 @@ public:
 		m_Vertices = c.m_Vertices;
 		m_IndexBuffer = c.m_IndexBuffer;
 		m_Indices = c.m_Indices;
+		m_FloraMin = c.m_FloraMin;
+		m_FloraMax = c.m_FloraMax;
+		m_FloraMove = c.m_FloraMove;
+		m_FloraBoundsValid = c.m_FloraBoundsValid;
+		m_ViewRanges = c.m_ViewRanges;
+		m_PaletteRanges = c.m_PaletteRanges;
 	}
 
 	inline ~AuGLVAO()
@@ -254,7 +270,7 @@ public:
 	// 'tris' is the list of triangle data needed to construct the VAO.
 	// 'usage' is passed to glBufferData. e.g. GL_STREAM_DRAW or GL_STATIC_DRAW.
 	// DOES NOTHING if this VAO has already been created or if 'tris' is empty.
-	void CreateForModelTexFog(AuOpenGLFunctions& GLf, const QList<AuTriTexNS>& tris, GLenum usage);
+	void CreateForModelTexFog(AuOpenGLFunctions& GLf, const QList<AuTriTexNS>& tris, GLenum usage, bool indexed=false);
 
 	// Creates this vertex array object from a list of triangles.
 	// The target shaders for this VAO are 'Sc' and 'ScFog'.
@@ -277,6 +293,11 @@ public:
 	// DOES NOTHING if this VAO has already been created or if 'verts' is empty.
 	void CreateForSprites(AuOpenGLFunctions& GLf, const QList<AuPointAlpha>& verts, GLenum usage);
 
+	// Reuse a vec4 particle stream; caller keeps this VAO with its rendering context.
+	void UpdateParticleStream(AuOpenGLFunctions& GLf, const QVector<GLfloat>& verts);
+	void UpdateTextQuad(AuOpenGLFunctions& GLf, const AuPoint& ll, const AuPoint& ul,
+		const AuPoint& ur, const AuPoint& lr);
+
 	// This works for the 'SpriteSizeColor' shader.
 	// vert location is the sprite location.
 	// vert.Glow() is the sprite color, including alpha.
@@ -292,10 +313,26 @@ public:
 	// DOES NOTHING if this VAO has already been created or if 'tris' is empty.
 	void CreateForTexture(AuOpenGLFunctions& GLf, const QList<AuTriTex>& tris, GLenum usage);
 
+	void SetViewRanges(const float* positions, const QVector<GLuint>& indices) { m_ViewRanges.Build(positions, m_Vertices, indices); }
+	void DrawVisibleGL(const AuViewClip& clip, float minRadius=1, float maxRadius=1) const;
+
+	void SetPaletteRanges(const float* values, int vertices, int stride,
+		const QVector<GLuint>& indices=QVector<GLuint>(), bool pavement=false)
+	{ m_PaletteRanges.Build(values,vertices,stride,indices,pavement); }
+
+	void SetFloraBounds(const float* positions, const float* movement, int count);
+	bool FloraInView(const AuViewClip& clip, const AuMatrix4x4& placement, const AuPoint& force) const
+	{
+		return !m_FloraBoundsValid || clip.IntersectsPlaced(m_FloraMin, m_FloraMax, placement, force, m_FloraMove);
+	}
+
 	// Creates the OpenGL VAO. Be sure to call DeleteGL some time.
 	inline void CreateGL(AuOpenGLFunctions& GLf, GLuint vertices, GLuint buffers)
 	{
 		m_GLf = &GLf;
+		m_FloraBoundsValid = false;
+		m_ViewRanges.Clear();
+		m_PaletteRanges.Clear();
 
 		//Q_ASSERT(vertices);
 		//Q_ASSERT(!m_VAO);
@@ -312,6 +349,8 @@ public:
 	// Deletes this VAO.
 	inline void DeleteGL()
 	{
+		m_ViewRanges.Clear();
+		m_PaletteRanges.Clear();
 		//Q_ASSERT(m_GLf);
 		//Q_ASSERT(m_Buffers);
 		m_GLf->glDeleteBuffers(m_BufferCount, m_Buffers);
@@ -333,6 +372,8 @@ public:
 
 	inline void SetIndices(const QVector<GLuint>& indices)
 	{
+		m_ViewRanges.Clear();
+		m_PaletteRanges.Clear();
 		if(!m_VAO || indices.isEmpty())
 			return;
 		m_GLf->glBindVertexArray(m_VAO);
@@ -358,12 +399,16 @@ public:
 		for(GLuint buffer=0; buffer<m_BufferCount; buffer++)
 			m_GLf->glEnableVertexAttribArray(buffer);
 
-		if(m_Indices)
-			m_GLf->glDrawElements(GL_TRIANGLES, m_Indices, GL_UNSIGNED_INT, 0);
-		else
-			m_GLf->glDrawArrays(GL_TRIANGLES, 0, m_Vertices);
-		AuRenderCounters::s_DrawCalls++;
-		AuRenderCounters::s_Vertices += m_Indices ? m_Indices : m_Vertices;
+		auto draw = [&](int first, int count)
+		{
+			if(m_Indices)
+				m_GLf->glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, reinterpret_cast<const void*>(size_t(first)*sizeof(GLuint)));
+			else
+				m_GLf->glDrawArrays(GL_TRIANGLES, first, count);
+			AuRenderCounters::s_DrawCalls++;
+			AuRenderCounters::s_Vertices += count;
+		};
+		if(!m_PaletteRanges.DrawGL(m_GLf,draw)) draw(0,m_Indices ? m_Indices : m_Vertices);
 
 		for(GLuint buffer=0; buffer<m_BufferCount; buffer++)
 			m_GLf->glDisableVertexAttribArray(buffer);
@@ -418,6 +463,12 @@ public:
 		m_Vertices = c.m_Vertices;
 		m_IndexBuffer = c.m_IndexBuffer;
 		m_Indices = c.m_Indices;
+		m_FloraMin = c.m_FloraMin;
+		m_FloraMax = c.m_FloraMax;
+		m_FloraMove = c.m_FloraMove;
+		m_FloraBoundsValid = c.m_FloraBoundsValid;
+		m_ViewRanges = c.m_ViewRanges;
+		m_PaletteRanges = c.m_PaletteRanges;
 
 		return *this;
 	}
@@ -619,6 +670,13 @@ protected:
 	GLuint								m_Program;				// Program identifier assigned by OpenGL glCreateProgram.
 	AuOpenGLFunctions*					m_GLf;					// Captured when Build function called.
 
+	// Track the last enabled slot without compacting the light/shadow arrays.
+	mutable GLint m_pointLightEnd = -2;
+	mutable int m_PointLightEnd = 0;
+	mutable bool m_PointLightEnabled[MAX_POINT_LIGHTS] = {};
+	void SetPointLightEnabled(int light, bool enabled) const;
+
+
 private:
 	const AuGLSL*						m_Owner;
 	GLint								m_shadowBodyCount;
@@ -664,6 +722,10 @@ public:
 	{
 		m_GLf = &GLf;
 		m_Owner = opt.Owner();
+		m_pointLightEnd = -2;
+		m_PointLightEnd = 0;
+		for(int light=0; light<MAX_POINT_LIGHTS; ++light)
+			m_PointLightEnabled[light] = false;
 		m_ShadowBodiesLooked = false;
 		m_ShadowBodiesLocalLooked = false;
 		m_ShadowBodiesLocalSent = -1;
@@ -3734,7 +3796,9 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
+		if(!enabled) return;
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
 		m_GLf->glUniform3f(m_lightColor[light], colorR, colorG, colorB);
@@ -4042,7 +4106,9 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
+		if(!enabled) return;
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
 		m_GLf->glUniform3f(m_lightColor[light], colorR, colorG, colorB);
@@ -4358,6 +4424,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -4611,6 +4678,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -6345,7 +6413,9 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
+		if(!enabled) return;
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
 		m_GLf->glUniform3f(m_lightColor[light], colorR, colorG, colorB);
@@ -6590,6 +6660,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -6847,6 +6918,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -7092,6 +7164,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -7171,6 +7244,7 @@ class AUGL_DLL AuGLSLRock : public AuGLSLProgram
 	bool								m_SunsValid;			// True while this shader's suns are in sync with AuGLEffects.
 
 private:
+	GLint m_instanced, m_instanceBase;
 	GLint								m_fogColor;				// Location of 'fogColor' uniform variable.
 	GLint								m_fogDensity;			// Location of 'fogDensity' uniform variable.
 	GLint								m_glowAlpha;			// Location of 'glowAlpha' lighting uniform variable.
@@ -7339,6 +7413,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -7359,6 +7434,12 @@ public:
 
 	// This shader program must be selected into the current OpenGL context before calling this function.
 	// 'rockM' is rock placement matrix on the globe.
+	inline void SetInstanced(bool on, int base=0) const
+	{
+		m_GLf->glUniform1i(m_instanced, on ? 1 : 0);
+		m_GLf->glUniform1i(m_instanceBase, base);
+	}
+
 	inline void SetRockMatrix(const AuMatrix4x4& rockM) const
 	{
 		// Set uniform variables.
@@ -7575,6 +7656,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -8058,6 +8140,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -8281,6 +8364,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -8831,6 +8915,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -9016,6 +9101,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -9179,6 +9265,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -9328,6 +9415,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -9375,7 +9463,7 @@ private:
 	GLint								m_fogDensity;			// Location of 'fogDensity' uniform variable.
 	GLint								m_mv;					// Location of 'mv' uniform variable.
 	GLint								m_OldTexture0;			// Previous texture binding for restore upon deselect.
-	GLint								m_offset;				// Location of 'offset' uniform variable.
+	GLint								m_offset;				// Location of 'offsets' sampler uniform.
 	GLint								m_p;					// Location of 'p' uniform variable.
 	GLint								m_size;					// Location of 'size' uniform variable.
 	GLint								m_tex;					// Location of 'tex' uniform variable.
@@ -9465,13 +9553,6 @@ public:
 		m_GLf->glUniform3f(m_ambient, ambientR, ambientG, ambientB);
 	}
 
-	// Offset position for snow flake sprite. This is the center of the snow flake in object space.
-	// This location is in object space.
-	inline void SetFlakePosition(float x, float y, float z)
-	{
-		m_GLf->glUniform3f(m_offset, x, y, z);
-	}
-
 	// 'density' is fog density for GL_EXP fog computation.
 	//   fog = exp(-density * Zdepth)
 	inline void SetFog(float density, float r, float g, float b)
@@ -9516,6 +9597,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -9583,7 +9665,7 @@ private:
 	GLint								m_fogDensity;			// Location of 'fogDensity' uniform variable.
 	GLint								m_mv;					// Location of 'mv' uniform variable.
 	GLint								m_OldTexture0;			// Previous texture binding for restore upon deselect.
-	GLint								m_offset;				// Location of 'offset' uniform variable.
+	GLint								m_offset;				// Location of 'offsets' sampler uniform.
 	GLint								m_p;					// Location of 'p' uniform variable.
 	GLint								m_size;					// Location of 'size' uniform variable.
 	GLint								m_tex;					// Location of 'tex' uniform variable.
@@ -9677,13 +9759,6 @@ public:
 		m_GLf->glUniform3f(m_ambient, ambientR, ambientG, ambientB);
 	}
 
-	// Offset position for snow flake sprite. This is the center of the snow flake in object space.
-	// This location is in object space.
-	inline void SetFlakePosition(float x, float y, float z)
-	{
-		m_GLf->glUniform3f(m_offset, x, y, z);
-	}
-
 	// 'density' is fog density for GL_EXP fog computation.
 	//   fog = exp(-density * Zdepth)
 	inline void SetFog(float density, float r, float g, float b)
@@ -9721,6 +9796,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -10121,6 +10197,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -10348,6 +10425,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -10574,6 +10652,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -10778,6 +10857,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -11006,6 +11086,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -11218,6 +11299,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -11944,6 +12026,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -12126,7 +12209,9 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
+		if(!enabled) return;
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
 		m_GLf->glUniform3f(m_lightColor[light], colorR, colorG, colorB);
@@ -12542,6 +12627,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -12832,6 +12918,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -13035,6 +13122,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -13301,6 +13389,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -13615,6 +13704,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -13842,6 +13932,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -14093,6 +14184,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -14392,6 +14484,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -14604,6 +14697,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -14879,6 +14973,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -15202,6 +15297,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -15438,6 +15534,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -15688,6 +15785,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -15995,6 +16093,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -16215,6 +16314,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -16498,6 +16598,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -16829,6 +16930,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -17073,6 +17175,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -17297,6 +17400,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -17556,6 +17660,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -17800,6 +17905,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -18068,6 +18174,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -18311,6 +18418,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -18588,6 +18696,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -19399,6 +19508,7 @@ public:
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY,
 			float spotDirZ) const
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -19411,6 +19521,7 @@ public:
 
 	virtual void SetLightEnabled(int light, bool enabled) const
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 	}
 
@@ -19697,6 +19808,7 @@ public:
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY,
 			float spotDirZ) const
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -19709,6 +19821,7 @@ public:
 
 	virtual void SetLightEnabled(int light, bool enabled) const
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 	}
 
@@ -19980,6 +20093,7 @@ public:
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY,
 			float spotDirZ) const
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -19992,6 +20106,7 @@ public:
 
 	virtual void SetLightEnabled(int light, bool enabled) const
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 	}
 
@@ -20287,6 +20402,7 @@ public:
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY,
 			float spotDirZ) const
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -20299,6 +20415,7 @@ public:
 
 	virtual void SetLightEnabled(int light, bool enabled) const
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 	}
 
@@ -20577,6 +20694,7 @@ public:
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY,
 			float spotDirZ) const
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -20589,6 +20707,7 @@ public:
 
 	virtual void SetLightEnabled(int light, bool enabled) const
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 	}
 
@@ -20888,6 +21007,7 @@ public:
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY,
 			float spotDirZ) const
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -20900,6 +21020,7 @@ public:
 
 	virtual void SetLightEnabled(int light, bool enabled) const
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 	}
 
@@ -21153,6 +21274,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -21391,6 +21513,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -21613,6 +21736,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -21838,6 +21962,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -22073,6 +22198,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -22311,6 +22437,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -22533,6 +22660,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -22758,6 +22886,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
@@ -22968,6 +23097,7 @@ public:
 	inline void SetLight(int light, bool enabled, float kL, float kQ, float colorR, float colorG, float colorB, float locX,
 			float locY, float locZ, float spotCosOuterCone, float spotCosInnerCone, float spotDirX, float spotDirY, float spotDirZ)
 	{
+		SetPointLightEnabled(light, enabled);
 		m_GLf->glUniform1i(m_lightEnabled[light], enabled);
 		m_GLf->glUniform1f(m_lightKL[light], kL);
 		m_GLf->glUniform1f(m_lightKQ[light], kQ);
