@@ -7,6 +7,9 @@
 #include "auParticleSystem.h"
 #include "auglobal.h"
 #include "augleffects.h"
+#if defined(Q_OS_MACOS)
+#include <limits>
+#endif
 
 AuParticleSystem::AuParticleSystem()
 {
@@ -277,6 +280,21 @@ void AuParticleSystem::Render(const AuMatrix4x4& projection, const AuMatrix4x4& 
 	re.glDisable(GL_PROGRAM_POINT_SIZE); 
 }
 
+#if defined(Q_OS_MACOS)
+static bool ParticleBehindEye(const AuPoint& point, const double eyePlane[4])
+{
+	// Match the float positions and matrix uploaded to the sprite shader.
+	const double x = eyePlane[0] * float(point.x);
+	const double y = eyePlane[1] * float(point.y);
+	const double z = eyePlane[2] * float(point.z);
+	const double w = x + y + z + eyePlane[3];
+	// Keep points near the eye plane, including cancellation/rounding uncertainty.
+	const double tolerance = 16 * std::numeric_limits<float>::epsilon() *
+			(fabs(x) + fabs(y) + fabs(z) + fabs(eyePlane[3]) + 1);
+	return w < -tolerance;
+}
+#endif
+
 void AuParticleSystem::RenderCloud(const AuMatrix4x4& projection, const AuMatrix4x4& model, AuGLEffects& re, float scale)
 {
 	Q_UNUSED(projection);
@@ -284,9 +302,16 @@ void AuParticleSystem::RenderCloud(const AuMatrix4x4& projection, const AuMatrix
 	Q_UNUSED(scale);
 	// Compute billboard vertices's on the GPU using ARB_point_sprites
 	auParticle	*pParticle = GetActiveList();
+#if defined(Q_OS_MACOS)
+	const AuMatrix4x4 pmv = projection * model;
+	const double* matrix = pmv.GLMatrix();
+	const double eyePlane[4] = { float(matrix[3]), float(matrix[7]), float(matrix[11]), float(matrix[15]) };
+#endif
 
 	// Render point sprites
+#if !defined(Q_OS_MACOS)
 	re.glEnable(GL_PROGRAM_POINT_SIZE); 
+#endif
 	//re.glPointSize(GetSize() * scale);
 	/*
 	re.glBegin(GL_POINTS);
@@ -313,10 +338,26 @@ void AuParticleSystem::RenderCloud(const AuMatrix4x4& projection, const AuMatrix
 	QList<AuPointAlpha> verts;
 	while(pParticle)
 	{
+#if defined(Q_OS_MACOS)
+		// A point behind the eye cannot reach the framebuffer, regardless of size.
+		// Still simulate it normally so turning around reveals the current plume.
+		if(ParticleBehindEye(pParticle->m_vCurPos, eyePlane))
+		{
+			pParticle = pParticle->m_pNext;
+			continue;
+		}
+#endif
 		float partAlpha = (1.f - (GetCurTime() - pParticle->m_fInitTime) / GetLifeCycle()) / 2.f;
 		verts << AuPointAlpha(pParticle->m_vCurPos, partAlpha);
 		pParticle = pParticle->m_pNext;
 	}
+
+#if defined(Q_OS_MACOS)
+	// Avoid creating/uploading/deleting GPU buffers for a fully hidden cloud.
+	if(verts.isEmpty())
+		return;
+	re.glEnable(GL_PROGRAM_POINT_SIZE);
+#endif
 
 	// Make a VAO of the vertex locations.
 	AuGLVAO vao;
